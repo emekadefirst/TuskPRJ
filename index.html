@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pump Config API</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --surface: #161616;
+      --border: #2a2a2a;
+      --accent: #e8ff5a;
+      --accent-dim: #b8cc3a;
+      --text: #e8e8e8;
+      --muted: #666;
+      --get: #4ade80;
+      --patch: #facc15;
+      --delete: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      min-height: 100vh;
+    }
+    code, .mono { font-family: 'IBM Plex Mono', monospace; }
+
+    /* Sidebar */
+    #sidebar {
+      width: 220px; min-width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      height: 100vh;
+      position: sticky; top: 0;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .nav-group-label {
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 18px 16px 6px;
+      font-weight: 500;
+    }
+    .nav-item {
+      display: block;
+      padding: 7px 16px;
+      font-size: 12px;
+      color: #aaa;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .nav-item:hover { color: var(--text); background: #1e1e1e; }
+    .nav-item.active { border-left-color: var(--accent); color: var(--accent); background: #1a1d00; }
+
+    /* Method badges */
+    .badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-right: 5px;
+      font-family: 'IBM Plex Mono', monospace;
+      letter-spacing: 0.05em;
+    }
+    .badge-get    { background: #052e16; color: var(--get); }
+    .badge-patch  { background: #1c1400; color: var(--patch); }
+    .badge-delete { background: #2a0000; color: var(--delete); }
+
+    /* Cards */
+    .endpoint-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+    .endpoint-card:hover { border-color: #3a3a3a; }
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      cursor: pointer;
+      gap: 10px;
+      background: var(--surface);
+      user-select: none;
+    }
+    .endpoint-path {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      color: #ccc;
+      flex: 1;
+    }
+    .endpoint-summary { font-size: 11px; color: var(--muted); }
+    .chevron { transition: transform 0.2s; color: var(--muted); font-size: 12px; }
+    .chevron.open { transform: rotate(90deg); }
+
+    /* Endpoint body */
+    .endpoint-body {
+      display: none;
+      padding: 14px;
+      border-top: 1px solid var(--border);
+      background: #111;
+    }
+    .endpoint-body.open { display: block; }
+
+    /* Form fields */
+    label { font-size: 11px; color: #888; display: block; margin-bottom: 3px; font-family: 'IBM Plex Mono', monospace; }
+    input[type="text"], textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 6px 9px;
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* Buttons */
+    .btn-execute {
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+      font-size: 11px;
+      padding: 6px 16px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace;
+      letter-spacing: 0.05em;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-execute:hover { background: var(--accent-dim); }
+    .btn-execute:active { transform: scale(0.97); }
+    .btn-execute:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+    .btn-clear {
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace;
+      transition: all 0.15s;
+    }
+    .btn-clear:hover { color: var(--text); border-color: #444; }
+
+    /* Response */
+    .response-box {
+      margin-top: 12px;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .response-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #0d0d0d;
+      font-size: 10px;
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .status-ok   { background: var(--get); }
+    .status-err  { background: var(--delete); }
+    .status-info { background: var(--patch); }
+    pre.response-pre {
+      margin: 0;
+      padding: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: #b0cca0;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 280px;
+      overflow-y: auto;
+      background: #0a0e08;
+    }
+
+    /* Section headers */
+    .section-title {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 600;
+      padding-bottom: 10px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #1e2200;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border: 2px solid #333;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+    /* Base URL bar */
+    #base-url-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      width: 300px;
+      outline: none;
+    }
+    #base-url-input:focus { border-color: var(--accent); }
+
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    @media (max-width: 640px) { .field-grid { grid-template-columns: 1fr; } }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      padding: 8px 14px;
+      border-radius: 5px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<div style="display:flex; height:100vh; overflow:hidden;">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div style="padding: 16px 16px 12px; border-bottom: 1px solid var(--border);">
+      <div style="font-size:13px; font-weight:600; color:var(--accent); font-family:'IBM Plex Mono',monospace; letter-spacing:0.05em;">PUMP API</div>
+      <div style="font-size:10px; color:var(--muted); margin-top:2px;">Configuration Explorer</div>
+    </div>
+
+    <div class="nav-group-label">Base URL</div>
+    <div style="padding: 0 12px 12px;">
+      <input id="base-url-input" type="text" value="http://localhost:8000" style="width:100%;" />
+    </div>
+
+    <div id="nav-links"></div>
+  </nav>
+
+  <!-- MAIN -->
+  <main style="flex:1; overflow-y:auto; padding: 28px 32px;">
+    <div id="sections-container"></div>
+  </main>
+
+</div>
+
+<script>
+// ─── Route definitions ────────────────────────────────────────────────────
+const RESOURCES = [
+  {
+    id: "pump-info",
+    label: "PumpInfoRepository",
+    prefix: "/pump-info",
+    fetchFields: [
+      "id","series","size","pump_material","shaft_configuration",
+      "casing_metal","casing_drain","casing_tap","flange_configuration",
+      "spot_facing","casing_wear_ring","tack_weld_wear_ring","casing_mounting",
+      "hardware","seal_chamber_config","shipping_gasket","cradle_material"
+    ],
+    lookupFields: ["id","series","size","pump_material"],
+    updateFields: [
+      "series","size","pump_material","shaft_configuration","casing_metal",
+      "casing_drain","casing_tap","flange_configuration","spot_facing",
+      "casing_wear_ring","tack_weld_wear_ring","casing_mounting","hardware",
+      "seal_chamber_config","shipping_gasket","cradle_material"
+    ]
+  },
+  {
+    id: "impellers",
+    label: "ImpellerRepository",
+    prefix: "/impellers",
+    fetchFields: ["id","impeller_range","impeller_trim","impeller_balance","impeller_material","impeller_wear_ring_material"],
+    lookupFields: ["id","impeller_range","impeller_material"],
+    updateFields: ["impeller_range","impeller_trim","impeller_balance","impeller_material","impeller_wear_ring_material"]
+  },
+  {
+    id: "base-plates",
+    label: "BasePlateRepository",
+    prefix: "/base-plates",
+    fetchFields: ["id","baseplate_type","baseplate_material","drip_pan","allignment_lugs","lifting_lugs","leveling_screws","grounding_lugs","grout_hole","isolation_pads","stilts"],
+    lookupFields: ["id","baseplate_type","baseplate_material"],
+    updateFields: ["baseplate_type","baseplate_material","drip_pan","allignment_lugs","lifting_lugs","leveling_screws","grounding_lugs","grout_hole","isolation_pads","stilts"]
+  },
+  {
+    id: "options",
+    label: "OptionsRepository",
+    prefix: "/options",
+    fetchFields: ["id","coupling_type","coupling_guard","auxillary_nameplate","crating","oil_options","bearing_frame_cooling","lubrication_options","oil_seat","sight_gauge","magnetic_drain","expansion_chamber"],
+    lookupFields: ["id","coupling_type","oil_options","lubrication_options"],
+    updateFields: ["coupling_type","coupling_guard","auxillary_nameplate","crating","oil_options","bearing_frame_cooling","lubrication_options","oil_seat","sight_gauge","magnetic_drain","expansion_chamber"]
+  },
+  {
+    id: "test-documentation",
+    label: "TestDocumentationRepository",
+    prefix: "/test-documentation",
+    fetchFields: ["id","performance_testing","hydro_testing","vibration","sound_level","general_inspection","documenttation_1","documenttation_2","documenttation_3","documenttation_4","documenttation_5","documenttation_6"],
+    lookupFields: ["id","performance_testing","hydro_testing","general_inspection"],
+    updateFields: ["performance_testing","hydro_testing","vibration","sound_level","general_inspection","documenttation_1","documenttation_2","documenttation_3","documenttation_4","documenttation_5","documenttation_6"]
+  },
+  {
+    id: "pump-configs",
+    label: "PumpConfigRepository",
+    prefix: "/pump-configs",
+    fetchFields: ["id","pump_info_id","impeller_id","base_plate_id","options_id","test_documentation_id"],
+    lookupFields: ["id","pump_info_id","impeller_id"],
+    updateFields: ["pump_info_id","impeller_id","base_plate_id","options_id","test_documentation_id"]
+  }
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+function baseUrl() { return document.getElementById('base-url-input').value.replace(/\/$/, ''); }
+
+function qs(suffix) { return document.getElementById(suffix); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function setResponse(boxId, status, body) {
+  const box = qs(boxId);
+  if (!box) return;
+  const isOk = status >= 200 && status < 300;
+  const isNo = status === 204;
+  box.innerHTML = `
+    <div class="response-header">
+      <span class="status-dot ${isOk ? 'status-ok' : 'status-err'}"></span>
+      <span>${status} ${isNo ? 'No Content' : ''}</span>
+      <span style="margin-left:auto; cursor:pointer; color:#555;" onclick="copyResponse('${boxId}')">copy</span>
+    </div>
+    <pre class="response-pre">${isNo ? '— deleted —' : escHtml(JSON.stringify(body, null, 2))}</pre>
+  `;
+}
+
+function setLoading(boxId) {
+  const box = qs(boxId);
+  if (!box) return;
+  box.innerHTML = `
+    <div class="response-header">
+      <span class="spinner"></span>
+      <span style="margin-left:6px;">Requesting…</span>
+    </div>
+  `;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function copyResponse(boxId) {
+  const pre = qs(boxId)?.querySelector('pre');
+  if (pre) { navigator.clipboard.writeText(pre.textContent); showToast('Copied to clipboard'); }
+}
+
+function toggleCard(id) {
+  const body = qs('body-' + id);
+  const chev = qs('chev-' + id);
+  if (!body) return;
+  const open = body.classList.toggle('open');
+  chev?.classList.toggle('open', open);
+}
+
+function fieldsToQueryString(fields, prefix) {
+  const params = new URLSearchParams();
+  fields.forEach(f => {
+    const el = qs(`${prefix}-${f}`);
+    if (el && el.value.trim()) params.append(f, el.value.trim());
+  });
+  return params.toString() ? '?' + params.toString() : '';
+}
+
+// ─── API calls ───────────────────────────────────────────────────────────
+async function doFetch(res) {
+  const rId = res.id + '-fetch';
+  setLoading('resp-' + rId);
+  const qs_str = fieldsToQueryString(res.fetchFields, 'fetch-' + res.id);
+  try {
+    const r = await fetch(baseUrl() + res.prefix + '/' + qs_str);
+    const data = r.status === 204 ? null : await r.json();
+    setResponse('resp-' + rId, r.status, data);
+  } catch(e) { setResponse('resp-' + rId, 0, { error: e.message }); }
+}
+
+async function doLookup(res) {
+  const rId = res.id + '-lookup';
+  setLoading('resp-' + rId);
+  const qs_str = fieldsToQueryString(res.lookupFields, 'lookup-' + res.id);
+  try {
+    const r = await fetch(baseUrl() + res.prefix + '/lookup' + qs_str);
+    const data = r.status === 204 ? null : await r.json();
+    setResponse('resp-' + rId, r.status, data);
+  } catch(e) { setResponse('resp-' + rId, 0, { error: e.message }); }
+}
+
+async function doUpdate(res) {
+  const rId = res.id + '-update';
+  setLoading('resp-' + rId);
+  const idEl = qs('update-id-' + res.id);
+  const id = idEl?.value.trim();
+  if (!id) { setResponse('resp-' + rId, 0, { error: 'ID is required' }); return; }
+  const body = {};
+  res.updateFields.forEach(f => {
+    const el = qs('upd-' + res.id + '-' + f);
+    if (el && el.value.trim()) body[f] = el.value.trim();
+  });
+  try {
+    const r = await fetch(baseUrl() + res.prefix + '/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = r.status === 204 ? null : await r.json();
+    setResponse('resp-' + rId, r.status, data);
+  } catch(e) { setResponse('resp-' + rId, 0, { error: e.message }); }
+}
+
+async function doDelete(res) {
+  const rId = res.id + '-delete';
+  setLoading('resp-' + rId);
+  const idEl = qs('delete-id-' + res.id);
+  const id = idEl?.value.trim();
+  if (!id) { setResponse('resp-' + rId, 0, { error: 'ID is required' }); return; }
+  try {
+    const r = await fetch(baseUrl() + res.prefix + '/' + id, { method: 'DELETE' });
+    if (r.status === 204) { setResponse('resp-' + rId, 204, null); }
+    else { const data = await r.json(); setResponse('resp-' + rId, r.status, data); }
+  } catch(e) { setResponse('resp-' + rId, 0, { error: e.message }); }
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────
+function renderFieldGrid(fields, idPrefix) {
+  return `<div class="field-grid">` +
+    fields.map(f => `
+      <div>
+        <label>${f}</label>
+        <input type="text" id="${idPrefix}-${f}" placeholder="optional" />
+      </div>
+    `).join('') +
+  `</div>`;
+}
+
+function renderResponseBox(rId) {
+  return `<div class="response-box" id="resp-${rId}" style="display:none;"></div>`;
+}
+
+function renderEndpoint(cardId, method, path, summary, bodyHtml, onExec) {
+  const badgeClass = { GET: 'badge-get', PATCH: 'badge-patch', DELETE: 'badge-delete' }[method] || 'badge-get';
+  return `
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="toggleCard('${cardId}'); qs('resp-${cardId}') && (qs('resp-${cardId}').style.display='block');">
+        <span class="badge ${badgeClass}">${method}</span>
+        <span class="endpoint-path">${path}</span>
+        <span class="endpoint-summary">${summary}</span>
+        <span class="chevron" id="chev-${cardId}">›</span>
+      </div>
+      <div class="endpoint-body" id="body-${cardId}">
+        ${bodyHtml}
+        <div style="display:flex; gap:8px; margin-top:12px; align-items:center;">
+          <button class="btn-execute" onclick="${onExec}">Execute</button>
+          <button class="btn-clear" onclick="clearCard('${cardId}')">Clear</button>
+        </div>
+        <div class="response-box" id="resp-${cardId}" style="margin-top:12px; display:none;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function clearCard(cardId) {
+  const body = qs('body-' + cardId);
+  if (!body) return;
+  body.querySelectorAll('input, textarea').forEach(el => el.value = '');
+  const resp = qs('resp-' + cardId);
+  if (resp) resp.style.display = 'none';
+}
+
+function buildUI() {
+  const nav = document.getElementById('nav-links');
+  const container = document.getElementById('sections-container');
+
+  RESOURCES.forEach(res => {
+    // Nav
+    const group = document.createElement('div');
+    group.innerHTML = `
+      <div class="nav-group-label">${res.label.replace('Repository','')}</div>
+      <a class="nav-item" onclick="scrollTo('${res.id}')"><span class="badge badge-get">GET</span>fetch</a>
+      <a class="nav-item" onclick="scrollTo('${res.id}')"><span class="badge badge-get">GET</span>lookup</a>
+      <a class="nav-item" onclick="scrollTo('${res.id}')"><span class="badge badge-patch">PATCH</span>update</a>
+      <a class="nav-item" onclick="scrollTo('${res.id}')"><span class="badge badge-delete">DEL</span>delete</a>
+    `;
+    nav.appendChild(group);
+
+    // Section
+    const section = document.createElement('section');
+    section.id = 'section-' + res.id;
+    section.style.marginBottom = '44px';
+
+    const fetchCard = renderEndpoint(
+      res.id + '-fetch', 'GET', res.prefix + '/', 'Fetch filtered list',
+      renderFieldGrid(res.fetchFields, 'fetch-' + res.id),
+      `doFetch(RESOURCES.find(r=>r.id==='${res.id}'))`
+    );
+
+    const lookupCard = renderEndpoint(
+      res.id + '-lookup', 'GET', res.prefix + '/lookup', 'Single record lookup',
+      renderFieldGrid(res.lookupFields, 'lookup-' + res.id),
+      `doLookup(RESOURCES.find(r=>r.id==='${res.id}'))`
+    );
+
+    const updateBody = `
+      <div style="margin-bottom:10px;">
+        <label>record id *</label>
+        <input type="text" id="update-id-${res.id}" placeholder="UUID required" />
+      </div>
+      <div style="font-size:10px; color:var(--muted); margin-bottom:8px; font-family:'IBM Plex Mono',monospace;">— fields to update (leave blank to skip) —</div>
+      ${renderFieldGrid(res.updateFields, 'upd-' + res.id)}
+    `;
+    const updateCard = renderEndpoint(
+      res.id + '-update', 'PATCH', res.prefix + '/{id}', 'Partial field update',
+      updateBody,
+      `doUpdate(RESOURCES.find(r=>r.id==='${res.id}'))`
+    );
+
+    const deleteBody = `
+      <div>
+        <label>record id *</label>
+        <input type="text" id="delete-id-${res.id}" placeholder="UUID required" />
+      </div>
+      <div style="font-size:10px; color:#f87171; margin-top:8px; font-family:'IBM Plex Mono',monospace;">⚠ This action is permanent and cannot be undone.</div>
+    `;
+    const deleteCard = renderEndpoint(
+      res.id + '-delete', 'DELETE', res.prefix + '/{id}', 'Hard delete record',
+      deleteBody,
+      `doDelete(RESOURCES.find(r=>r.id==='${res.id}'))`
+    );
+
+    section.innerHTML = `
+      <div class="section-title">${res.label}</div>
+      ${fetchCard}
+      ${lookupCard}
+      ${updateCard}
+      ${deleteCard}
+    `;
+    container.appendChild(section);
+  });
+}
+
+function scrollTo(id) {
+  const el = document.getElementById('section-' + id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+buildUI();
+
+// Active nav on scroll
+const main = document.querySelector('main');
+main.addEventListener('scroll', () => {
+  const sections = RESOURCES.map(r => document.getElementById('section-' + r.id));
+  let active = null;
+  sections.forEach(s => {
+    if (s && s.getBoundingClientRect().top < 120) active = s.id.replace('section-', '');
+  });
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (active) {
+    const items = document.querySelectorAll('.nav-item');
+    items.forEach(item => {
+      if (item.getAttribute('onclick')?.includes(active)) item.classList.add('active');
+    });
+  }
+});
+</script>
+</body>
+</html>
