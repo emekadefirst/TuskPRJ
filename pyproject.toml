@@ -12,3 +12,8 @@ dependencies = [
     "tortoise-orm[asyncpg]>=0.25.4",
     "uvicorn[standard]>=0.48.0",
 ]
+
+[tool.aerich]
+tortoise_orm = "main.TORTOISE_ORM"
+location = "./migrations"
+src_folder = "./."

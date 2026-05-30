@@ -8,6 +8,9 @@ import uvicorn
 # import the tortoise config
 from src.database import TORTOISE_ORM
 
+# add COR Middleware
+from fastapi.middleware.cors import CORSMiddleware
+
 # import tortose-fastapi config library
 from tortoise.contrib.fastapi import register_tortoise
 
@@ -35,6 +38,18 @@ register_tortoise(
     config=TORTOISE_ORM,
     generate_schemas=False,   # IMPORTANT: no runtime schema creation
     add_exception_handlers=True,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5500"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
