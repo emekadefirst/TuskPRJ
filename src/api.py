@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
-from repositories import (
+from src.repository import (
     BasePlateRepository,
     ImpellerRepository,
     OptionsRepository,
