@@ -42,7 +42,19 @@
 
     <div class="px-4 py-3 border-t border-border">
       <p class="text-zinc-600 text-xs">API Base URL</p>
-      <p class="text-zinc-400 text-xs truncate" id="api-url-display"></p>
+      <p class="text-zinc-400 text-xs truncate" id="api-url-display">same-origin</p>
+    </div>
+
+    <div id="user-chip" class="hidden border-t border-border p-3 flex items-center gap-2 text-xs">
+      <span class="w-7 h-7 rounded-full bg-brand text-black font-bold flex items-center justify-center shrink-0" id="user-avatar">·</span>
+      <div class="leading-tight min-w-0 flex-1">
+        <p class="text-zinc-200 truncate" id="user-name">—</p>
+        <p class="text-zinc-500 text-[10px] truncate" id="user-email">—</p>
+      </div>
+      <button id="btn-logout"
+              class="px-2 py-1 border border-border rounded hover:border-red-500 hover:text-red-400 transition shrink-0">
+        ⎋
+      </button>
     </div>
   </aside>
 
@@ -59,7 +71,7 @@
                 class="px-4 py-2 border border-border text-sm rounded hover:bg-surface transition">
           ↺ Refresh
         </button>
-        <button onclick="openCreateModal()"
+        <button id="btn-new" onclick="openCreateModal()"
                 class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">
           + New Record
         </button>
@@ -125,11 +137,73 @@
   <div id="toast"
        class="hidden fixed bottom-6 right-6 bg-surface border border-border rounded px-4 py-2 text-sm shadow-lg z-50"></div>
 
+  <!-- ─── Auth gate ───────────────────────────────────────── -->
+  <div id="auth-gate"
+       class="fixed inset-0 bg-panel/95 backdrop-blur-sm flex items-center justify-center z-40 p-6">
+    <div class="w-full max-w-md border border-border rounded-lg bg-surface shadow-2xl">
+      <div class="px-6 pt-6 pb-2 text-center">
+        <p class="text-brand font-bold text-sm tracking-widest uppercase">Pump Admin</p>
+        <p class="text-zinc-500 text-xs mt-1">Sign in to manage records</p>
+      </div>
+      <div class="flex border-b border-border mt-4">
+        <button id="tab-login"
+                class="flex-1 py-2 text-xs uppercase tracking-wider border-b-2 border-brand text-brand">Sign in</button>
+        <button id="tab-register"
+                class="flex-1 py-2 text-xs uppercase tracking-wider border-b-2 border-transparent text-zinc-400 hover:text-white transition">Create account</button>
+      </div>
+      <form id="auth-form" class="p-6 space-y-3" onsubmit="event.preventDefault(); submitAuth();">
+        <div id="field-first" class="hidden">
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">first name</label>
+          <input name="first_name" autocomplete="given-name"
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand" />
+        </div>
+        <div id="field-last" class="hidden">
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">last name</label>
+          <input name="last_name" autocomplete="family-name"
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">email</label>
+          <input name="email" type="email" autocomplete="email" required
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">password</label>
+          <input name="password" type="password" autocomplete="current-password" required minlength="6"
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand" />
+        </div>
+        <p id="auth-error" class="hidden text-red-400 text-xs"></p>
+        <button id="btn-auth-submit" type="submit"
+                class="w-full px-4 py-2.5 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">
+          Sign in
+        </button>
+      </form>
+    </div>
+  </div>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 // Config
 // ═══════════════════════════════════════════════════════════
-const API = "http://127.0.0.1:8000";
+// Empty string -> every fetch uses the same origin the page was
+// served from, so the auth cookie flows automatically.
+const API = "";
+
+// Send the auth cookie with every API call and bounce to login on 401.
+const _origFetch = window.fetch.bind(window);
+window.fetch = async (input, init = {}) => {
+  const url = typeof input === "string" ? input : (input && input.url) || "";
+  // Treat any same-origin (relative) URL or one that starts with the configured API host as our API.
+  const isApi = !/^https?:\/\//i.test(url) || (API && url.startsWith(API));
+  const opts = isApi ? { credentials: "include", ...init } : init;
+  const res  = await _origFetch(input, opts);
+
+  // Don't intercept the auth probe itself
+  if (isApi && res.status === 401 && !url.endsWith("/auth/me")) {
+    forceLogout?.();
+  }
+  return res;
+};
 
 const RESOURCES = [
   {
@@ -197,6 +271,28 @@ const RESOURCES = [
       test_documentation_id: { route: "/test-documentation", labelCols: ["performance_testing", "hydro_testing", "vibration"] },
     },
   },
+  {
+    label: "Users",
+    route: "/users",
+    columns: ["id", "first_name", "last_name", "email", "created_at"],
+    // Users have no create/edit form on this page (use /auth/register instead).
+    formFields: [],
+    readOnly: true,
+  },
+  {
+    label: "Orders",
+    route: "/orders",
+    // status, total, item count + most recent activity
+    columns: ["id", "status", "total", "items", "created_at"],
+    nestedColumns: {
+      // `items` is an array of OrderItem dicts; show count + first pump series
+      items: ["__count__"],
+    },
+    // Edit form lets you change just status / notes / shipping address.
+    formFields: ["status", "notes", "shipping_address"],
+    statusField: "status",
+    statusOptions: ["pending", "confirmed", "shipped", "delivered", "cancelled"],
+  },
 ];
 
 let active   = RESOURCES[0];
@@ -235,7 +331,7 @@ function escHtml(s) {
 // ═══════════════════════════════════════════════════════════
 function renderNav() {
   const nav = document.querySelector("nav");
-  $("api-url-display").textContent = API;
+  $("api-url-display").textContent = API || `${window.location.origin} (same origin)`;
 
   nav.innerHTML = RESOURCES.map(r => `
     <button
@@ -255,6 +351,8 @@ function switchResource(route) {
   $("page-title").textContent = active.label;
   $("page-route").textContent = active.route;
   $("search-input").value = "";
+  // Hide "New Record" for read-only resources (e.g. Users)
+  $("btn-new").classList.toggle("hidden", !!active.readOnly);
   renderNav();
   renderStatCards();
   loadTable();
@@ -356,6 +454,17 @@ function renderTable(rows) {
             const label = parts.length ? parts.join(" · ") : (v.id ? String(v.id).slice(0,8) + "…" : "—");
             titleAttr = escAttr(JSON.stringify(v, null, 2));
             display = `<span class="text-zinc-200">${escHtml(label)}</span>`;
+          } else if (Array.isArray(v) && nested && nested.includes("__count__")) {
+            // Render arrays (e.g. order.items[]) as a count + brief preview
+            titleAttr = escAttr(JSON.stringify(v, null, 2));
+            const preview = v.slice(0, 2).map(it => {
+              const pc = it?.pump_config;
+              const head = pc?.pump_info ? [pc.pump_info.series, pc.pump_info.size].filter(Boolean).join(" ") : "";
+              return `${it?.quantity ?? 1}× ${head || (pc?.id ? pc.id.slice(0,6) + "…" : "?")}`;
+            }).join(", ");
+            const more = v.length > 2 ? `, +${v.length - 2}` : "";
+            display = `<span class="text-zinc-200">${v.length} item${v.length === 1 ? "" : "s"}</span>` +
+                      (preview ? `<span class="text-zinc-600 text-[10px] block truncate">${escHtml(preview + more)}</span>` : "");
           } else if (v == null || v === "") {
             display = '<span class="text-zinc-600">—</span>';
           } else if (c === "id") {
@@ -370,8 +479,9 @@ function renderTable(rows) {
         }).join("")}
         <td class="px-4 py-3">
           <div class="flex gap-2">
+            ${active.readOnly ? "" : `
             <button onclick="openEditModal('${row.id}')"
-                    class="px-2 py-1 text-xs border border-border rounded hover:border-brand hover:text-brand transition">Edit</button>
+                    class="px-2 py-1 text-xs border border-border rounded hover:border-brand hover:text-brand transition">Edit</button>`}
             <button onclick="deleteRecord('${row.id}')"
                     class="px-2 py-1 text-xs border border-red-900 text-red-500 rounded hover:bg-red-900/20 transition">Delete</button>
           </div>
@@ -467,6 +577,22 @@ function buildForm(data = {}) {
             </div>
           </div>
           <p data-cb-hint class="text-zinc-600 text-xs mt-1">${initialId ? "Loading current selection…" : ""}</p>
+        </div>
+      `;
+    }
+
+    // Status enum -> <select>
+    if (active.statusField === f && Array.isArray(active.statusOptions)) {
+      const cur = data[f] ?? active.statusOptions[0];
+      return `
+        <div>
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">${f}</label>
+          <select name="${f}"
+                  class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand">
+            ${active.statusOptions.map(opt =>
+              `<option value="${opt}" ${opt === cur ? 'selected' : ''}>${opt}</option>`
+            ).join("")}
+          </select>
         </div>
       `;
     }
@@ -699,8 +825,9 @@ function closeModal() {
 async function submitForm() {
   const form = $("modal-form");
   const body = {};
-  [...form.querySelectorAll("input")].forEach(i => {
-    const v = i.value.trim();
+  [...form.querySelectorAll("input, select, textarea")].forEach(i => {
+    if (!i.name) return;
+    const v = (i.value ?? "").trim();
     body[i.name] = v === "" ? null : v;
   });
 
@@ -757,17 +884,137 @@ function exportJSON() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Auth (login / register / logout / current user)
+// ═══════════════════════════════════════════════════════════
+let authMode = "login";
+let currentUser = null;
+
+function showAuthGate(show) {
+  $("auth-gate").classList.toggle("hidden", !show);
+  $("auth-gate").classList.toggle("flex", show);
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const isReg = mode === "register";
+  $("tab-login").classList.toggle("border-brand", !isReg);
+  $("tab-login").classList.toggle("text-brand",   !isReg);
+  $("tab-login").classList.toggle("border-transparent", isReg);
+  $("tab-login").classList.toggle("text-zinc-400", isReg);
+  $("tab-register").classList.toggle("border-brand", isReg);
+  $("tab-register").classList.toggle("text-brand",   isReg);
+  $("tab-register").classList.toggle("border-transparent", !isReg);
+  $("tab-register").classList.toggle("text-zinc-400", !isReg);
+  $("field-first").classList.toggle("hidden", !isReg);
+  $("field-last").classList.toggle("hidden", !isReg);
+  $("btn-auth-submit").textContent = isReg ? "Create account" : "Sign in";
+  $("auth-error").classList.add("hidden");
+}
+
+async function checkAuth() {
+  try {
+    const res = await fetch(`${API}/auth/me`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function renderUserChip(user) {
+  currentUser = user;
+  if (!user) {
+    $("user-chip").classList.add("hidden");
+    $("user-chip").classList.remove("flex");
+    return;
+  }
+  const initials = ((user.first_name?.[0] || "") + (user.last_name?.[0] || "")).toUpperCase() || "U";
+  $("user-avatar").textContent = initials;
+  $("user-name").textContent   = `${user.first_name} ${user.last_name}`.trim() || user.email;
+  $("user-email").textContent  = user.email;
+  $("user-chip").classList.remove("hidden");
+  $("user-chip").classList.add("flex");
+}
+
+async function submitAuth() {
+  const data = Object.fromEntries(new FormData($("auth-form")).entries());
+  const url  = authMode === "register" ? `${API}/auth/register` : `${API}/auth/login`;
+
+  $("auth-error").classList.add("hidden");
+  $("btn-auth-submit").disabled = true;
+  $("btn-auth-submit").textContent = authMode === "register" ? "Creating…" : "Signing in…";
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = typeof err.detail === "string"
+        ? err.detail
+        : Array.isArray(err.detail)
+          ? err.detail.map(d => `${(d.loc || []).slice(-1)}: ${d.msg}`).join(" · ")
+          : `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    const body = await res.json();
+    renderUserChip(body.user);
+    showAuthGate(false);
+    toast(authMode === "register" ? "Account created" : "Signed in", "ok");
+
+    bootDashboard();
+  } catch (e) {
+    $("auth-error").textContent = e.message;
+    $("auth-error").classList.remove("hidden");
+  } finally {
+    $("btn-auth-submit").disabled = false;
+    $("btn-auth-submit").textContent = authMode === "register" ? "Create account" : "Sign in";
+  }
+}
+
+async function logout() {
+  try { await fetch(`${API}/auth/logout`, { method: "POST" }); } catch {}
+  forceLogout();
+  toast("Signed out", "ok");
+}
+
+function forceLogout() {
+  renderUserChip(null);
+  // Reset state so a different user doesn't see cached rows
+  Object.keys(stats).forEach(k => delete stats[k]);
+  Object.keys(FK_CACHE).forEach(k => delete FK_CACHE[k]);
+  allRows = [];
+  showAuthGate(true);
+}
+
+function bootDashboard() {
+  renderNav();
+  renderStatCards();
+  loadAllStats();
+  loadTable();
+}
+
+// ═══════════════════════════════════════════════════════════
 // Boot
 // ═══════════════════════════════════════════════════════════
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeModal();
 });
 
-window.addEventListener("DOMContentLoaded", () => {
-  renderNav();
-  renderStatCards();
-  loadAllStats();
-  loadTable();
+window.addEventListener("DOMContentLoaded", async () => {
+  $("tab-login").addEventListener("click",    () => setAuthMode("login"));
+  $("tab-register").addEventListener("click", () => setAuthMode("register"));
+  $("btn-logout").addEventListener("click",   logout);
+  setAuthMode("login");
+
+  const user = await checkAuth();
+  if (user) {
+    renderUserChip(user);
+    showAuthGate(false);
+    bootDashboard();
+  } else {
+    showAuthGate(true);
+  }
 });
 </script>
 </body>

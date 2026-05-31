@@ -14,6 +14,15 @@ class BaseModel(Model):
         abstract = True # prvents the compiler from treating the class as a but as a regualar python class 
 
 
+class User(BaseModel):
+    first_name = fields.CharField(max_length=255)
+    last_name  = fields.CharField(max_length=255)
+    email = fields.CharField(max_length=255)
+    password = fields.CharField(max_length=255)
+
+    class Meta:
+        table = "users"
+
 class PumpInfo(BaseModel):
     series = fields.CharField(max_length=255)
     size = fields.CharField(max_length=255)
@@ -131,3 +140,45 @@ class PumpConfig(BaseModel):
 
     class Meta:
         table = "pump_configs"
+
+
+class Order(BaseModel):
+    """
+    A purchase order placed by a user. The total is summed from the line items
+    and stored on the order so historical orders don't change if prices move.
+    """
+
+    STATUSES = ("pending", "confirmed", "shipped", "delivered", "cancelled")
+
+    user = fields.ForeignKeyField(
+        "models.User",
+        related_name="orders",
+        on_delete=fields.CASCADE,
+    )
+    status = fields.CharField(max_length=32, default="pending")
+    notes = fields.TextField(null=True)
+    shipping_address = fields.TextField(null=True)
+    total = fields.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        table = "orders"
+
+
+class OrderItem(BaseModel):
+    """A single line item on an order: one pump config, with quantity + price."""
+
+    order = fields.ForeignKeyField(
+        "models.Order",
+        related_name="items",
+        on_delete=fields.CASCADE,
+    )
+    pump_config = fields.ForeignKeyField(
+        "models.PumpConfig",
+        related_name="order_items",
+        on_delete=fields.RESTRICT,  # don't let a config disappear under an order
+    )
+    quantity = fields.IntField(default=1)
+    unit_price = fields.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        table = "order_items"

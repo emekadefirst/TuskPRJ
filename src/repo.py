@@ -1,17 +1,84 @@
 from fastapi import HTTPException
 from tortoise.expressions import Q
 from typing import Optional
-
-from src.models import BasePlate, Impeller, Options, PumpConfig, PumpInfo, TestDocumentation
+from argon2 import PasswordHasher
+from src.models import User, BasePlate, Impeller, Options, PumpConfig, PumpInfo, TestDocumentation
 from src.schemas import (
     ImpellerSchema, ImpellerUpdateSchema,
     BasePlateSchema, BasePlateUpdateSchema,
     OptionSchema, OptionUpdateSchema,
     PumpInfoSchema, PumpInfoUpdateSchema,
     TestDocumentationSchema, TestDocumentationUpdateSchema,
-    PumpConfigSchema, PumpConfigUpdateSchema
+    PumpConfigSchema, PumpConfigUpdateSchema,
+    UserCreateSchema, UserUpdateSchema,
 )
 
+ph = PasswordHasher()
+
+SAFE_FIELDS = ["id", "first_name", "last_name", "email", "created_at", "updated_at"]
+
+
+class UserRepo:
+
+    @classmethod
+    async def create(cls, dto: UserCreateSchema):
+        existing = await User.get_or_none(email=dto.email)
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already registered")
+
+        hashed = ph.hash(dto.password)
+        return await User.create(
+            first_name=dto.first_name,
+            last_name=dto.last_name,
+            email=dto.email,
+            password=hashed
+        )
+
+    @classmethod
+    async def fetch(cls, id: Optional[str] = None, email: Optional[str] = None, search: Optional[str] = None):
+        if id is not None:
+            return await User.filter(id=id).values(*SAFE_FIELDS).first()
+
+        if email is not None:
+            return await User.filter(email=email).values(*SAFE_FIELDS).first()
+
+        if search is not None:
+            return await User.filter(
+                Q(id__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            ).values(*SAFE_FIELDS)
+
+        return await User.all().values(*SAFE_FIELDS)
+
+    @classmethod
+    async def update(cls, id: str, dto: UserUpdateSchema):
+        user = await User.get_or_none(id=id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        update_data = dto.model_dump(exclude_unset=True)
+
+        if "password" in update_data:
+            update_data["password"] = ph.hash(update_data["password"])
+
+        if "email" in update_data and update_data["email"] != user.email:
+            existing = await User.get_or_none(email=update_data["email"])
+            if existing:
+                raise HTTPException(status_code=409, detail="Email already in use")
+
+        await user.update_from_dict(update_data)
+        await user.save()
+
+        return await User.filter(id=id).values(*SAFE_FIELDS).first()
+
+    @classmethod
+    async def delete(cls, id: str):
+        user = await User.get_or_none(id=id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        await user.delete()
 
 class PumpInfoRepo:
     @classmethod
@@ -303,3 +370,148 @@ class PumpConfigRepo:
             "pump_info", "impeller", "base_plate", "options", "test_documentation"
         )
         return cls._serialize(pump_config)
+
+
+
+# ---------------------------------------------------------------------------
+# OrderRepo
+# ---------------------------------------------------------------------------
+from decimal import Decimal
+from tortoise.transactions import in_transaction
+
+from src.models import Order, OrderItem, User
+from src.schemas import OrderSchema, OrderUpdateSchema
+
+
+class OrderRepo:
+
+    VALID_STATUSES = {"pending", "confirmed", "shipped", "delivered", "cancelled"}
+
+    @staticmethod
+    def _serialize_item(item: OrderItem) -> dict:
+        pc = getattr(item, "pump_config", None)
+        return {
+            "id":             str(item.id),
+            "quantity":       item.quantity,
+            "unit_price":     str(item.unit_price),
+            "subtotal":       str(Decimal(item.unit_price) * item.quantity),
+            "pump_config":    PumpConfigRepo._serialize(pc) if pc else None,
+            "pump_config_id": str(pc.id) if pc else None,
+            "created_at":     item.created_at.isoformat() if item.created_at else None,
+            "updated_at":     item.updated_at.isoformat() if item.updated_at else None,
+        }
+
+    @classmethod
+    def _serialize(cls, order: Order) -> dict:
+        items = list(getattr(order, "items", []) or [])
+        return {
+            "id":               str(order.id),
+            "status":           order.status,
+            "notes":            order.notes,
+            "shipping_address": order.shipping_address,
+            "total":            str(order.total),
+            "user_id":          str(order.user_id) if hasattr(order, "user_id") else None,
+            "items":            [cls._serialize_item(i) for i in items],
+            "created_at":       order.created_at.isoformat() if order.created_at else None,
+            "updated_at":       order.updated_at.isoformat() if order.updated_at else None,
+        }
+
+    @classmethod
+    async def create(cls, user: User, dto: OrderSchema) -> dict:
+        # Validate every referenced pump config exists before we create anything.
+        config_ids = [i.pump_config_id for i in dto.items]
+        existing = await PumpConfig.filter(id__in=config_ids).values_list("id", flat=True)
+        existing_set = {str(x) for x in existing}
+        missing = [cid for cid in config_ids if cid not in existing_set]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown pump_config_id(s): {', '.join(missing)}",
+            )
+
+        total = sum((Decimal(i.unit_price) * i.quantity for i in dto.items), Decimal("0"))
+
+        async with in_transaction():
+            order = await Order.create(
+                user_id=user.id,
+                status="pending",
+                notes=dto.notes,
+                shipping_address=dto.shipping_address,
+                total=total,
+            )
+            for it in dto.items:
+                await OrderItem.create(
+                    order_id=order.id,
+                    pump_config_id=it.pump_config_id,
+                    quantity=it.quantity,
+                    unit_price=it.unit_price,
+                )
+
+        return await cls.fetch(id=str(order.id), user=user)
+
+    @classmethod
+    async def fetch(
+        cls,
+        user: Optional[User] = None,
+        id: Optional[str] = None,
+        search: Optional[str] = None,
+    ):
+        """
+        - If `id` is given, return one order (scoped to user when provided).
+        - Otherwise return a list, scoped to user when provided.
+        - `search` matches order id prefix, status, or notes.
+        """
+        # Build base queryset
+        if id is not None:
+            qs = Order.filter(id=id)
+            if user is not None:
+                qs = qs.filter(user_id=user.id)
+            order = await qs.prefetch_related(
+                "items__pump_config__pump_info",
+                "items__pump_config__impeller",
+                "items__pump_config__base_plate",
+                "items__pump_config__options",
+                "items__pump_config__test_documentation",
+            ).first()
+            return cls._serialize(order) if order else None
+
+        qs = Order.all()
+        if user is not None:
+            qs = qs.filter(user_id=user.id)
+        if search:
+            qs = qs.filter(
+                Q(status__icontains=search)
+                | Q(notes__icontains=search)
+            )
+
+        orders = await qs.order_by("-created_at").prefetch_related(
+            "items__pump_config__pump_info",
+            "items__pump_config__impeller",
+            "items__pump_config__base_plate",
+            "items__pump_config__options",
+            "items__pump_config__test_documentation",
+        )
+        return [cls._serialize(o) for o in orders]
+
+    @classmethod
+    async def update(cls, user: User, id: str, dto: OrderUpdateSchema):
+        order = await Order.get_or_none(id=id, user_id=user.id)
+        if order is None:
+            return None
+        data = dto.model_dump(exclude_unset=True)
+        if "status" in data and data["status"] not in cls.VALID_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status. Must be one of: {sorted(cls.VALID_STATUSES)}",
+            )
+        await order.update_from_dict(data)
+        await order.save()
+        return await cls.fetch(id=str(order.id), user=user)
+
+    @classmethod
+    async def delete(cls, user: User, id: str):
+        order = await Order.get_or_none(id=id, user_id=user.id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        await order.delete()
+        return None

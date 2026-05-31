@@ -1,5 +1,18 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
+
+
+class UserCreateSchema(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    password: str
+
+class UserUpdateSchema(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    password: str
 
 
 class PumpInfoSchema(BaseModel):
@@ -146,3 +159,29 @@ class PumpConfigUpdateSchema(BaseModel):
     base_plate_id: Optional[str]
     option_id: Optional[str]
     test_documentation_id: Optional[str]
+
+
+
+# ---------------------------------------------------------------------------
+# Order / OrderItem
+# ---------------------------------------------------------------------------
+from pydantic import Field
+from decimal import Decimal
+
+
+class OrderItemSchema(BaseModel):
+    pump_config_id: str
+    quantity: int = Field(default=1, ge=1)
+    unit_price: Decimal = Field(default=Decimal("0"), ge=0)
+
+
+class OrderSchema(BaseModel):
+    items: list[OrderItemSchema] = Field(..., min_length=1)
+    notes: Optional[str] = None
+    shipping_address: Optional[str] = None
+
+
+class OrderUpdateSchema(BaseModel):
+    status: Optional[str] = None         # pending|confirmed|shipped|delivered|cancelled
+    notes: Optional[str] = None
+    shipping_address: Optional[str] = None

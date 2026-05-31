@@ -270,3 +270,59 @@ async def update_pump_config(id: str, dto: PumpConfigUpdateSchema):
 @pump_config_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_pump_config(id: str):
     return await PumpConfigRepo.delete(id=id)
+
+
+
+# ---------------------------------------------------------------------------
+# Orders (auth-protected; users only see their own orders)
+# ---------------------------------------------------------------------------
+from fastapi import Depends
+
+from src.auth import get_current_user
+from src.models import User
+from src.repo import OrderRepo
+from src.schemas import OrderSchema, OrderUpdateSchema
+
+
+order_router = APIRouter(prefix="/orders", tags=["Order"])
+
+
+@order_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_order(
+    dto: OrderSchema,
+    user: User = Depends(get_current_user),
+):
+    return await OrderRepo.create(user=user, dto=dto)
+
+
+@order_router.get("/")
+async def list_orders(
+    user: User = Depends(get_current_user),
+    search: Optional[str] = Query(default=None),
+):
+    return await OrderRepo.fetch(user=user, search=search)
+
+
+@order_router.get("/{id}")
+async def fetch_order(id: str, user: User = Depends(get_current_user)):
+    data = await OrderRepo.fetch(user=user, id=id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return data
+
+
+@order_router.patch("/{id}")
+async def update_order(
+    id: str,
+    dto: OrderUpdateSchema,
+    user: User = Depends(get_current_user),
+):
+    data = await OrderRepo.update(user=user, id=id, dto=dto)
+    if not data:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return data
+
+
+@order_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_order(id: str, user: User = Depends(get_current_user)):
+    return await OrderRepo.delete(user=user, id=id)

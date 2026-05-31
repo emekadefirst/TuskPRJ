@@ -35,10 +35,21 @@
       <p class="text-zinc-500 text-xs mt-1">Compose a complete pump spec from validated components</p>
     </div>
     <div class="flex items-center gap-3">
-      <a href="dashboard.html"
+      <a href="/dashboard"
          class="text-xs text-zinc-400 border border-border rounded px-3 py-1.5 hover:text-brand hover:border-brand transition">
         ↗ Admin Dashboard
       </a>
+      <div id="user-chip" class="hidden items-center gap-2 text-xs">
+        <span class="w-7 h-7 rounded-full bg-brand text-black font-bold flex items-center justify-center" id="user-avatar">·</span>
+        <div class="leading-tight">
+          <p class="text-zinc-200" id="user-name">—</p>
+          <p class="text-zinc-500 text-[10px]" id="user-email">—</p>
+        </div>
+        <button id="btn-logout"
+                class="ml-1 px-2 py-1 border border-border rounded hover:border-red-500 hover:text-red-400 transition">
+          Logout
+        </button>
+      </div>
       <span id="conn" class="text-xs text-zinc-500">checking…</span>
     </div>
   </header>
@@ -122,12 +133,45 @@
         <button onclick="closeResult()" class="text-zinc-500 hover:text-white text-xl">✕</button>
       </div>
       <pre id="result-body"
-           class="bg-panel border border-border rounded p-4 text-xs text-zinc-300 overflow-auto max-h-[50vh]"></pre>
+           class="bg-panel border border-border rounded p-4 text-xs text-zinc-300 overflow-auto max-h-[40vh]"></pre>
+
+      <!-- Order form for the just-saved config -->
+      <div id="order-form" class="mt-4 border border-border rounded p-4 bg-panel/50">
+        <h3 class="text-zinc-400 text-xs uppercase tracking-wider mb-3">Place an order for this build</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-zinc-500 text-[10px] uppercase tracking-wider mb-1">Quantity</label>
+            <input id="order-qty" type="number" min="1" value="1"
+                   class="w-full bg-panel border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+          </div>
+          <div>
+            <label class="block text-zinc-500 text-[10px] uppercase tracking-wider mb-1">Unit price</label>
+            <input id="order-price" type="number" min="0" step="0.01" value="0"
+                   class="w-full bg-panel border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+          </div>
+        </div>
+        <div class="mt-3">
+          <label class="block text-zinc-500 text-[10px] uppercase tracking-wider mb-1">Shipping address</label>
+          <input id="order-shipping" type="text" placeholder="optional"
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+        </div>
+        <div class="mt-3">
+          <label class="block text-zinc-500 text-[10px] uppercase tracking-wider mb-1">Notes</label>
+          <textarea id="order-notes" rows="2" placeholder="optional"
+                    class="w-full bg-panel border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand"></textarea>
+        </div>
+        <p id="order-error" class="hidden text-red-400 text-xs mt-2"></p>
+      </div>
+
       <div class="flex justify-end gap-2 mt-5">
         <button onclick="closeResult(); resetAll();"
                 class="px-4 py-2 border border-border text-sm rounded hover:bg-panel transition">Build another</button>
-        <a href="dashboard.html"
-           class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">View in dashboard</a>
+        <button id="btn-order" onclick="placeOrder()"
+                class="px-4 py-2 border border-brand text-brand text-sm rounded hover:bg-brand hover:text-black transition">
+          Place order
+        </button>
+        <a href="/dashboard"
+           class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">View dashboard</a>
       </div>
     </div>
   </div>
@@ -135,11 +179,66 @@
   <!-- ─── Toast ───────────────────────────────────────── -->
   <div id="toast" class="hidden fixed bottom-6 right-6 border rounded px-4 py-2 text-sm shadow-lg z-50"></div>
 
+  <!-- ─── Auth gate ───────────────────────────────────── -->
+  <div id="auth-gate"
+       class="fixed inset-0 bg-panel/95 backdrop-blur-sm flex items-center justify-center z-40 p-6">
+    <div class="w-full max-w-md border border-border rounded-lg bg-surface shadow-2xl">
+      <div class="px-6 pt-6 pb-2 text-center">
+        <p class="text-brand font-bold text-sm tracking-widest uppercase">Pump Configuration Builder</p>
+        <p class="text-zinc-500 text-xs mt-1">Sign in to continue</p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b border-border mt-4">
+        <button id="tab-login"
+                class="flex-1 py-2 text-xs uppercase tracking-wider border-b-2 border-brand text-brand">
+          Sign in
+        </button>
+        <button id="tab-register"
+                class="flex-1 py-2 text-xs uppercase tracking-wider border-b-2 border-transparent text-zinc-400 hover:text-white transition">
+          Create account
+        </button>
+      </div>
+
+      <form id="auth-form" class="p-6 space-y-3" onsubmit="event.preventDefault(); submitAuth();">
+        <div id="field-first" class="hidden">
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">first name</label>
+          <input name="first_name" autocomplete="given-name"
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand" />
+        </div>
+        <div id="field-last" class="hidden">
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">last name</label>
+          <input name="last_name" autocomplete="family-name"
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">email</label>
+          <input name="email" type="email" autocomplete="email" required
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">password</label>
+          <input name="password" type="password" autocomplete="current-password" required minlength="6"
+                 class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand" />
+        </div>
+
+        <p id="auth-error" class="hidden text-red-400 text-xs"></p>
+
+        <button id="btn-auth-submit" type="submit"
+                class="w-full px-4 py-2.5 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">
+          Sign in
+        </button>
+      </form>
+    </div>
+  </div>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 // Config
 // ═══════════════════════════════════════════════════════════
-const API = "http://127.0.0.1:8000";
+// Empty string makes every fetch use the same origin the page was
+// loaded from (e.g. http://127.0.0.1:8000), so cookies flow naturally.
+const API = "";
 
 // Each step picks a single record from one resource.
 // `payloadKey` is the field name that goes into the PumpConfig POST body.
@@ -218,6 +317,15 @@ let filteredRows  = [];
 // ═══════════════════════════════════════════════════════════
 const $ = (id) => document.getElementById(id);
 
+// Always send the auth cookie with every API call.
+function apiFetch(path, opts = {}) {
+  return fetch(path, {
+    credentials: "include",
+    ...opts,
+    headers: { ...(opts.headers || {}) },
+  });
+}
+
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -246,7 +354,7 @@ function joinFields(row, fields) {
 // ═══════════════════════════════════════════════════════════
 async function ping() {
   try {
-    const r = await fetch(`${API}/`);
+    const r = await apiFetch(`${API}/health`);
     $("conn").textContent = r.ok ? "● connected" : `● error ${r.status}`;
     $("conn").className   = r.ok ? "text-xs text-brand" : "text-xs text-red-400";
   } catch {
@@ -311,7 +419,8 @@ async function loadStep() {
 
   try {
     if (!cache[step.route]) {
-      const res = await fetch(`${API}${step.route}/`);
+      const res = await apiFetch(`${API}${step.route}/`);
+      if (res.status === 401) return forceLogout();
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       cache[step.route] = await res.json();
     }
@@ -494,11 +603,12 @@ async function saveConfig() {
   btn.textContent = "Saving…";
 
   try {
-    const res = await fetch(`${API}/pump-config/`, {
+    const res = await apiFetch(`${API}/pump-config/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    if (res.status === 401) return forceLogout();
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       const detail = typeof err.detail === "string"
@@ -509,7 +619,16 @@ async function saveConfig() {
       throw new Error(detail);
     }
     const saved = await res.json();
+    lastSavedConfig = saved;
     $("result-body").textContent = JSON.stringify(saved, null, 2);
+    // Reset order form fields each time
+    $("order-qty").value = "1";
+    $("order-price").value = "0";
+    $("order-shipping").value = "";
+    $("order-notes").value = "";
+    $("order-error").classList.add("hidden");
+    $("btn-order").disabled = false;
+    $("btn-order").textContent = "Place order";
     $("result-modal").classList.remove("hidden");
     toast("Pump config saved", "ok");
   } catch (e) {
@@ -524,6 +643,72 @@ function closeResult() {
   $("result-modal").classList.add("hidden");
 }
 
+// ═══════════════════════════════════════════════════════════
+// Place an order for the just-saved pump config
+// ═══════════════════════════════════════════════════════════
+let lastSavedConfig = null;
+
+async function placeOrder() {
+  if (!lastSavedConfig?.id) {
+    toast("No pump config to order", "err");
+    return;
+  }
+
+  const qty   = parseInt($("order-qty").value, 10) || 1;
+  const price = parseFloat($("order-price").value) || 0;
+  const shipping = $("order-shipping").value.trim();
+  const notes    = $("order-notes").value.trim();
+
+  if (qty < 1) {
+    $("order-error").textContent = "Quantity must be at least 1";
+    $("order-error").classList.remove("hidden");
+    return;
+  }
+
+  const payload = {
+    items: [{
+      pump_config_id: lastSavedConfig.id,
+      quantity: qty,
+      unit_price: price,
+    }],
+    shipping_address: shipping || null,
+    notes: notes || null,
+  };
+
+  const btn = $("btn-order");
+  btn.disabled = true;
+  btn.textContent = "Placing order…";
+  $("order-error").classList.add("hidden");
+
+  try {
+    const res = await apiFetch(`${API}/orders/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 401) return forceLogout();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = typeof err.detail === "string"
+        ? err.detail
+        : Array.isArray(err.detail)
+          ? err.detail.map(d => `${(d.loc || []).slice(-1)}: ${d.msg}`).join(" · ")
+          : `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    const order = await res.json();
+    toast(`Order ${String(order.id).slice(0,8)}… placed`, "ok");
+    btn.textContent = "✓ Ordered";
+    btn.disabled = true;
+  } catch (e) {
+    $("order-error").textContent = e.message;
+    $("order-error").classList.remove("hidden");
+    btn.disabled = false;
+    btn.textContent = "Place order";
+  }
+}
+window.placeOrder = placeOrder;
+
 function resetAll() {
   Object.keys(selected).forEach(k => delete selected[k]);
   stepIdx = 0;
@@ -531,13 +716,140 @@ function resetAll() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Auth (login / register / logout / current user)
+// ═══════════════════════════════════════════════════════════
+let authMode = "login"; // or "register"
+let currentUser = null;
+
+function showAuthGate(show) {
+  $("auth-gate").classList.toggle("hidden", !show);
+  $("auth-gate").classList.toggle("flex", show);
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const isReg = mode === "register";
+  $("tab-login").classList.toggle("border-brand", !isReg);
+  $("tab-login").classList.toggle("text-brand",   !isReg);
+  $("tab-login").classList.toggle("border-transparent", isReg);
+  $("tab-login").classList.toggle("text-zinc-400", isReg);
+
+  $("tab-register").classList.toggle("border-brand", isReg);
+  $("tab-register").classList.toggle("text-brand",   isReg);
+  $("tab-register").classList.toggle("border-transparent", !isReg);
+  $("tab-register").classList.toggle("text-zinc-400", !isReg);
+
+  $("field-first").classList.toggle("hidden", !isReg);
+  $("field-last").classList.toggle("hidden", !isReg);
+  $("btn-auth-submit").textContent = isReg ? "Create account" : "Sign in";
+  $("auth-error").classList.add("hidden");
+}
+
+async function checkAuth() {
+  try {
+    const res = await apiFetch(`${API}/auth/me`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function renderUserChip(user) {
+  currentUser = user;
+  if (!user) {
+    $("user-chip").classList.add("hidden");
+    $("user-chip").classList.remove("flex");
+    return;
+  }
+  const initials = ((user.first_name?.[0] || "") + (user.last_name?.[0] || "")).toUpperCase() || "U";
+  $("user-avatar").textContent = initials;
+  $("user-name").textContent   = `${user.first_name} ${user.last_name}`.trim() || user.email;
+  $("user-email").textContent  = user.email;
+  $("user-chip").classList.remove("hidden");
+  $("user-chip").classList.add("flex");
+}
+
+async function submitAuth() {
+  const form = $("auth-form");
+  const data = Object.fromEntries(new FormData(form).entries());
+  const url  = authMode === "register" ? `${API}/auth/register` : `${API}/auth/login`;
+
+  $("auth-error").classList.add("hidden");
+  $("btn-auth-submit").disabled = true;
+  $("btn-auth-submit").textContent = authMode === "register" ? "Creating…" : "Signing in…";
+
+  try {
+    const res = await apiFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = typeof err.detail === "string"
+        ? err.detail
+        : Array.isArray(err.detail)
+          ? err.detail.map(d => `${(d.loc || []).slice(-1)}: ${d.msg}`).join(" · ")
+          : `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    const body = await res.json();
+    renderUserChip(body.user);
+    showAuthGate(false);
+    toast(authMode === "register" ? "Account created" : "Signed in", "ok");
+
+    // First-time boot of the builder UI now that we're authed
+    Object.keys(cache).forEach(k => delete cache[k]);
+    Object.keys(selected).forEach(k => delete selected[k]);
+    stepIdx = 0;
+    ping();
+    renderStepper();
+    renderSummary();
+    loadStep();
+  } catch (e) {
+    const err = $("auth-error");
+    err.textContent = e.message;
+    err.classList.remove("hidden");
+  } finally {
+    $("btn-auth-submit").disabled = false;
+    $("btn-auth-submit").textContent = authMode === "register" ? "Create account" : "Sign in";
+  }
+}
+
+async function logout() {
+  try { await apiFetch(`${API}/auth/logout`, { method: "POST" }); } catch {}
+  forceLogout();
+  toast("Signed out", "ok");
+}
+
+function forceLogout() {
+  renderUserChip(null);
+  Object.keys(cache).forEach(k => delete cache[k]);
+  Object.keys(selected).forEach(k => delete selected[k]);
+  stepIdx = 0;
+  showAuthGate(true);
+}
+
+// ═══════════════════════════════════════════════════════════
 // Boot
 // ═══════════════════════════════════════════════════════════
-window.addEventListener("DOMContentLoaded", () => {
-  ping();
-  renderStepper();
-  renderSummary();
-  loadStep();
+window.addEventListener("DOMContentLoaded", async () => {
+  $("tab-login").addEventListener("click",   () => setAuthMode("login"));
+  $("tab-register").addEventListener("click",() => setAuthMode("register"));
+  $("btn-logout").addEventListener("click", logout);
+
+  setAuthMode("login");
+
+  const user = await checkAuth();
+  if (user) {
+    renderUserChip(user);
+    showAuthGate(false);
+    ping();
+    renderStepper();
+    renderSummary();
+    loadStep();
+  } else {
+    showAuthGate(true);
+  }
 });
 
 // Expose handlers used in inline onclick attributes
