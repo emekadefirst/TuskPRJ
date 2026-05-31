@@ -3,619 +3,548 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pump Config API</title>
+  <title>Pump Configuration Builder</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand:   "#c8f135",
+            surface: "#1a1a1a",
+            panel:   "#111111",
+            border:  "#2a2a2a",
+          }
+        }
+      }
+    }
+  </script>
   <style>
-    :root {
-      --bg: #0d0d0d;
-      --surface: #161616;
-      --border: #2a2a2a;
-      --accent: #e8ff5a;
-      --accent-dim: #b8cc3a;
-      --text: #e8e8e8;
-      --muted: #666;
-      --get: #4ade80;
-      --patch: #facc15;
-      --delete: #f87171;
-    }
-    * { box-sizing: border-box; }
-    body {
-      font-family: 'IBM Plex Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      margin: 0;
-      min-height: 100vh;
-    }
-    code, .mono { font-family: 'IBM Plex Mono', monospace; }
-
-    /* Sidebar */
-    #sidebar {
-      width: 220px; min-width: 220px;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      height: 100vh;
-      position: sticky; top: 0;
-      overflow-y: auto;
-      flex-shrink: 0;
-    }
-    .nav-group-label {
-      font-size: 9px;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--muted);
-      padding: 18px 16px 6px;
-      font-weight: 500;
-    }
-    .nav-item {
-      display: block;
-      padding: 7px 16px;
-      font-size: 12px;
-      color: #aaa;
-      cursor: pointer;
-      border-left: 2px solid transparent;
-      transition: all 0.15s;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-family: 'IBM Plex Mono', monospace;
-    }
-    .nav-item:hover { color: var(--text); background: #1e1e1e; }
-    .nav-item.active { border-left-color: var(--accent); color: var(--accent); background: #1a1d00; }
-
-    /* Method badges */
-    .badge {
-      display: inline-block;
-      font-size: 9px;
-      font-weight: 600;
-      padding: 1px 5px;
-      border-radius: 3px;
-      margin-right: 5px;
-      font-family: 'IBM Plex Mono', monospace;
-      letter-spacing: 0.05em;
-    }
-    .badge-get    { background: #052e16; color: var(--get); }
-    .badge-patch  { background: #1c1400; color: var(--patch); }
-    .badge-delete { background: #2a0000; color: var(--delete); }
-
-    /* Cards */
-    .endpoint-card {
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      margin-bottom: 8px;
-      overflow: hidden;
-      transition: border-color 0.15s;
-    }
-    .endpoint-card:hover { border-color: #3a3a3a; }
-    .endpoint-header {
-      display: flex;
-      align-items: center;
-      padding: 10px 14px;
-      cursor: pointer;
-      gap: 10px;
-      background: var(--surface);
-      user-select: none;
-    }
-    .endpoint-path {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 12px;
-      color: #ccc;
-      flex: 1;
-    }
-    .endpoint-summary { font-size: 11px; color: var(--muted); }
-    .chevron { transition: transform 0.2s; color: var(--muted); font-size: 12px; }
-    .chevron.open { transform: rotate(90deg); }
-
-    /* Endpoint body */
-    .endpoint-body {
-      display: none;
-      padding: 14px;
-      border-top: 1px solid var(--border);
-      background: #111;
-    }
-    .endpoint-body.open { display: block; }
-
-    /* Form fields */
-    label { font-size: 11px; color: #888; display: block; margin-bottom: 3px; font-family: 'IBM Plex Mono', monospace; }
-    input[type="text"], textarea {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 4px;
-      padding: 6px 9px;
-      font-size: 12px;
-      font-family: 'IBM Plex Mono', monospace;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
-    textarea { resize: vertical; min-height: 80px; }
-
-    /* Buttons */
-    .btn-execute {
-      background: var(--accent);
-      color: #000;
-      font-weight: 600;
-      font-size: 11px;
-      padding: 6px 16px;
-      border-radius: 4px;
-      border: none;
-      cursor: pointer;
-      font-family: 'IBM Plex Mono', monospace;
-      letter-spacing: 0.05em;
-      transition: background 0.15s, transform 0.1s;
-    }
-    .btn-execute:hover { background: var(--accent-dim); }
-    .btn-execute:active { transform: scale(0.97); }
-    .btn-execute:disabled { background: #333; color: #666; cursor: not-allowed; }
-
-    .btn-clear {
-      background: transparent;
-      color: var(--muted);
-      font-size: 11px;
-      padding: 6px 12px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      cursor: pointer;
-      font-family: 'IBM Plex Mono', monospace;
-      transition: all 0.15s;
-    }
-    .btn-clear:hover { color: var(--text); border-color: #444; }
-
-    /* Response */
-    .response-box {
-      margin-top: 12px;
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-    .response-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 10px;
-      background: #0d0d0d;
-      font-size: 10px;
-      font-family: 'IBM Plex Mono', monospace;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
-    }
-    .status-dot { width: 7px; height: 7px; border-radius: 50%; }
-    .status-ok   { background: var(--get); }
-    .status-err  { background: var(--delete); }
-    .status-info { background: var(--patch); }
-    pre.response-pre {
-      margin: 0;
-      padding: 12px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      color: #b0cca0;
-      white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 280px;
-      overflow-y: auto;
-      background: #0a0e08;
-    }
-
-    /* Section headers */
-    .section-title {
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--accent);
-      font-weight: 600;
-      padding-bottom: 10px;
-      margin-bottom: 16px;
-      border-bottom: 1px solid #1e2200;
-      font-family: 'IBM Plex Mono', monospace;
-    }
-
-    /* Spinner */
-    .spinner {
-      display: inline-block;
-      width: 10px; height: 10px;
-      border: 2px solid #333;
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar       { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
-
-    /* Base URL bar */
-    #base-url-input {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 4px;
-      padding: 5px 10px;
-      font-size: 12px;
-      font-family: 'IBM Plex Mono', monospace;
-      width: 300px;
-      outline: none;
-    }
-    #base-url-input:focus { border-color: var(--accent); }
-
-    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    @media (max-width: 640px) { .field-grid { grid-template-columns: 1fr; } }
-
-    /* Toast */
-    #toast {
-      position: fixed; bottom: 20px; right: 20px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-size: 12px;
-      font-family: 'IBM Plex Mono', monospace;
-      padding: 8px 14px;
-      border-radius: 5px;
-      opacity: 0;
-      transition: opacity 0.3s;
-      pointer-events: none;
-      z-index: 999;
-    }
-    #toast.show { opacity: 1; }
   </style>
 </head>
-<body>
+<body class="bg-panel text-white font-mono min-h-screen">
 
-<div id="toast"></div>
-
-<div style="display:flex; height:100vh; overflow:hidden;">
-
-  <!-- SIDEBAR -->
-  <nav id="sidebar">
-    <div style="padding: 16px 16px 12px; border-bottom: 1px solid var(--border);">
-      <div style="font-size:13px; font-weight:600; color:var(--accent); font-family:'IBM Plex Mono',monospace; letter-spacing:0.05em;">PUMP API</div>
-      <div style="font-size:10px; color:var(--muted); margin-top:2px;">Configuration Explorer</div>
+  <!-- ─── Top bar ─────────────────────────────────────── -->
+  <header class="border-b border-border bg-surface px-6 py-4 flex items-center justify-between sticky top-0 z-30">
+    <div>
+      <p class="text-brand font-bold text-sm tracking-widest uppercase">Pump Configuration Builder</p>
+      <p class="text-zinc-500 text-xs mt-1">Compose a complete pump spec from validated components</p>
     </div>
-
-    <div class="nav-group-label">Base URL</div>
-    <div style="padding: 0 12px 12px;">
-      <input id="base-url-input" type="text" value="http://127.0.0.1:8000" style="width:100%;" />
+    <div class="flex items-center gap-3">
+      <a href="dashboard.html"
+         class="text-xs text-zinc-400 border border-border rounded px-3 py-1.5 hover:text-brand hover:border-brand transition">
+        ↗ Admin Dashboard
+      </a>
+      <span id="conn" class="text-xs text-zinc-500">checking…</span>
     </div>
+  </header>
 
-    <div id="nav-links"></div>
-  </nav>
+  <!-- ─── Stepper ─────────────────────────────────────── -->
+  <nav id="stepper" class="px-6 py-4 border-b border-border bg-surface/40 flex flex-wrap gap-2"></nav>
 
-  <!-- MAIN -->
-  <main style="flex:1; overflow-y:auto; padding: 28px 32px;">
-    <div id="sections-container"></div>
-  </main>
+  <!-- ─── Layout ──────────────────────────────────────── -->
+  <div class="flex flex-col lg:flex-row gap-6 p-6">
 
-</div>
+    <!-- Builder panel -->
+    <section class="flex-1 min-w-0">
+      <div class="border border-border rounded-lg bg-surface">
+        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold" id="step-title">Step</h2>
+            <p class="text-zinc-500 text-xs mt-1" id="step-route">/</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="btn-prev"
+                    class="px-3 py-1.5 text-xs border border-border rounded hover:bg-panel transition">‹ Previous</button>
+            <button id="btn-next"
+                    class="px-3 py-1.5 text-xs border border-brand text-brand rounded hover:bg-brand hover:text-black transition">Next ›</button>
+          </div>
+        </div>
+
+        <!-- Search + list + spec preview -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-0">
+          <!-- LEFT: pickable list -->
+          <div class="border-r border-border">
+            <div class="p-4 border-b border-border">
+              <input id="picker-search" type="text"
+                     placeholder="Search components…"
+                     class="w-full bg-panel border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+              <p id="picker-count" class="text-zinc-600 text-xs mt-2">—</p>
+            </div>
+            <div id="picker-list" class="max-h-[60vh] overflow-y-auto"></div>
+          </div>
+
+          <!-- RIGHT: spec preview -->
+          <div class="p-5 bg-panel/40 min-h-[60vh]">
+            <h3 class="text-zinc-400 text-xs uppercase tracking-wider mb-3">Spec preview</h3>
+            <div id="spec-preview" class="text-sm text-zinc-300 space-y-2">
+              <p class="text-zinc-600 text-xs italic">Select an item to preview its full spec.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Summary sidebar -->
+    <aside class="w-full lg:w-96 shrink-0">
+      <div class="border border-border rounded-lg bg-surface sticky top-[140px]">
+        <div class="px-5 py-4 border-b border-border">
+          <h3 class="text-sm font-bold tracking-wider uppercase text-brand">Configuration</h3>
+          <p class="text-zinc-500 text-xs mt-1">Live summary of your build</p>
+        </div>
+
+        <div id="summary" class="p-3 space-y-2"></div>
+
+        <div class="px-5 py-4 border-t border-border space-y-2">
+          <button id="btn-save"
+                  class="w-full px-4 py-2.5 bg-brand text-black font-bold text-sm rounded hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition">
+            Save Pump Config
+          </button>
+          <button id="btn-reset"
+                  class="w-full px-4 py-2 border border-border text-xs text-zinc-400 rounded hover:bg-panel hover:text-white transition">
+            Reset selections
+          </button>
+          <p id="save-hint" class="text-zinc-600 text-xs text-center">Pick all five components to enable saving.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ─── Saved-config modal ──────────────────────────── -->
+  <div id="result-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-40 p-4">
+    <div class="bg-surface border border-border rounded-lg w-full max-w-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-bold text-lg text-brand">✓ Pump Config Saved</h2>
+        <button onclick="closeResult()" class="text-zinc-500 hover:text-white text-xl">✕</button>
+      </div>
+      <pre id="result-body"
+           class="bg-panel border border-border rounded p-4 text-xs text-zinc-300 overflow-auto max-h-[50vh]"></pre>
+      <div class="flex justify-end gap-2 mt-5">
+        <button onclick="closeResult(); resetAll();"
+                class="px-4 py-2 border border-border text-sm rounded hover:bg-panel transition">Build another</button>
+        <a href="dashboard.html"
+           class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">View in dashboard</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Toast ───────────────────────────────────────── -->
+  <div id="toast" class="hidden fixed bottom-6 right-6 border rounded px-4 py-2 text-sm shadow-lg z-50"></div>
 
 <script>
-// ─── Route definitions ────────────────────────────────────────────────────
-const RESOURCES = [
+// ═══════════════════════════════════════════════════════════
+// Config
+// ═══════════════════════════════════════════════════════════
+const API = "http://127.0.0.1:8000";
+
+// Each step picks a single record from one resource.
+// `payloadKey` is the field name that goes into the PumpConfig POST body.
+const STEPS = [
   {
-    id: "pump-info",
-    label: "PumpInfoRepository",
-    prefix: "/pump-info",
-    fetchFields: [
-      "id","series","size","pump_material","shaft_configuration",
-      "casing_metal","casing_drain","casing_tap","flange_configuration",
-      "spot_facing","casing_wear_ring","tack_weld_wear_ring","casing_mounting",
-      "hardware","seal_chamber_config","shipping_gasket","cradle_material"
-    ],
-    lookupFields: ["id","series","size","pump_material"],
-    updateFields: [
+    key:        "pump_info",
+    payloadKey: "pump_info_id",
+    label:      "Pump Info",
+    route:      "/pump-info",
+    primary:    ["series", "size", "pump_material"],   // headline shown in list / summary
+    secondary:  ["shaft_configuration", "casing_metal"], // small grey line in list
+    detail: [
       "series","size","pump_material","shaft_configuration","casing_metal",
       "casing_drain","casing_tap","flange_configuration","spot_facing",
       "casing_wear_ring","tack_weld_wear_ring","casing_mounting","hardware",
       "seal_chamber_config","shipping_gasket","cradle_material"
-    ]
+    ],
   },
   {
-    id: "impellers",
-    label: "ImpellerRepository",
-    prefix: "/impellers",
-    fetchFields: ["id","impeller_range","impeller_trim","impeller_balance","impeller_material","impeller_wear_ring_material"],
-    lookupFields: ["id","impeller_range","impeller_material"],
-    updateFields: ["impeller_range","impeller_trim","impeller_balance","impeller_material","impeller_wear_ring_material"]
+    key:        "impeller",
+    payloadKey: "impeller_id",
+    label:      "Impeller",
+    route:      "/impeller",
+    primary:    ["impeller_range", "impeller_trim"],
+    secondary:  ["impeller_material", "impeller_balance"],
+    detail:     ["impeller_range","impeller_trim","impeller_balance","impeller_material","impeller_wear_ring_material"],
   },
   {
-    id: "base-plates",
-    label: "BasePlateRepository",
-    prefix: "/base-plates",
-    fetchFields: ["id","baseplate_type","baseplate_material","drip_pan","allignment_lugs","lifting_lugs","leveling_screws","grounding_lugs","grout_hole","isolation_pads","stilts"],
-    lookupFields: ["id","baseplate_type","baseplate_material"],
-    updateFields: ["baseplate_type","baseplate_material","drip_pan","allignment_lugs","lifting_lugs","leveling_screws","grounding_lugs","grout_hole","isolation_pads","stilts"]
+    key:        "base_plate",
+    payloadKey: "base_plate_id",
+    label:      "Base Plate",
+    route:      "/base-plate",
+    primary:    ["baseplate_type", "baseplate_material"],
+    secondary:  ["drip_pan", "lifting_lugs"],
+    detail: [
+      "baseplate_type","baseplate_material","drip_pan","allignment_lugs","lifting_lugs",
+      "leveling_screws","grounding_lugs","grout_hole","isolation_pads","stilts"
+    ],
   },
   {
-    id: "options",
-    label: "OptionsRepository",
-    prefix: "/options",
-    fetchFields: ["id","coupling_type","coupling_guard","auxillary_nameplate","crating","oil_options","bearing_frame_cooling","lubrication_options","oil_seat","sight_gauge","magnetic_drain","expansion_chamber"],
-    lookupFields: ["id","coupling_type","oil_options","lubrication_options"],
-    updateFields: ["coupling_type","coupling_guard","auxillary_nameplate","crating","oil_options","bearing_frame_cooling","lubrication_options","oil_seat","sight_gauge","magnetic_drain","expansion_chamber"]
+    key:        "options",
+    payloadKey: "option_id", // PumpConfigSchema uses option_id (singular)
+    label:      "Options",
+    route:      "/options",
+    primary:    ["coupling_type", "oil_options"],
+    secondary:  ["lubrication_options", "coupling_guard"],
+    detail: [
+      "coupling_type","coupling_guard","auxillary_nameplate","crating","oil_options",
+      "bearing_frame_cooling","lubrication_options","oil_seat","sight_gauge",
+      "magnetic_drain","expansion_chamber"
+    ],
   },
   {
-    id: "test-documentation",
-    label: "TestDocumentationRepository",
-    prefix: "/test-documentation",
-    fetchFields: ["id","performance_testing","hydro_testing","vibration","sound_level","general_inspection","documenttation_1","documenttation_2","documenttation_3","documenttation_4","documenttation_5","documenttation_6"],
-    lookupFields: ["id","performance_testing","hydro_testing","general_inspection"],
-    updateFields: ["performance_testing","hydro_testing","vibration","sound_level","general_inspection","documenttation_1","documenttation_2","documenttation_3","documenttation_4","documenttation_5","documenttation_6"]
+    key:        "test_documentation",
+    payloadKey: "test_documentation_id",
+    label:      "Test Docs",
+    route:      "/test-documentation",
+    primary:    ["performance_testing", "hydro_testing"],
+    secondary:  ["vibration", "general_inspection"],
+    detail: [
+      "performance_testing","hydro_testing","vibration","sound_level","general_inspection",
+      "documenttation_1","documenttation_2","documenttation_3","documenttation_4",
+      "documenttation_5","documenttation_6"
+    ],
   },
-  {
-    id: "pump-configs",
-    label: "PumpConfigRepository",
-    prefix: "/pump-configs",
-    fetchFields: ["id","pump_info_id","impeller_id","base_plate_id","options_id","test_documentation_id"],
-    lookupFields: ["id","pump_info_id","impeller_id"],
-    updateFields: ["pump_info_id","impeller_id","base_plate_id","options_id","test_documentation_id"]
-  }
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-function baseUrl() { return document.getElementById('base-url-input').value.replace(/\/$/, ''); }
+// State
+let stepIdx       = 0;
+const cache       = {};   // route -> rows[]
+const selected    = {};   // step.key -> row
+let filteredRows  = [];
 
-function qs(suffix) { return document.getElementById(suffix); }
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
-}
-
-function setResponse(boxId, status, body) {
-  const box = qs(boxId);
-  if (!box) return;
-  const isOk = status >= 200 && status < 300;
-  const isNo = status === 204;
-  box.innerHTML = `
-    <div class="response-header">
-      <span class="status-dot ${isOk ? 'status-ok' : 'status-err'}"></span>
-      <span>${status} ${isNo ? 'No Content' : ''}</span>
-      <span style="margin-left:auto; cursor:pointer; color:#555;" onclick="copyResponse('${boxId}')">copy</span>
-    </div>
-    <pre class="response-pre">${isNo ? '— deleted —' : escHtml(JSON.stringify(body, null, 2))}</pre>
-  `;
-}
-
-function setLoading(boxId) {
-  const box = qs(boxId);
-  if (!box) return;
-  box.innerHTML = `
-    <div class="response-header">
-      <span class="spinner"></span>
-      <span style="margin-left:6px;">Requesting…</span>
-    </div>
-  `;
-}
+// ═══════════════════════════════════════════════════════════
+// Tiny helpers
+// ═══════════════════════════════════════════════════════════
+const $ = (id) => document.getElementById(id);
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function copyResponse(boxId) {
-  const pre = qs(boxId)?.querySelector('pre');
-  if (pre) { navigator.clipboard.writeText(pre.textContent); showToast('Copied to clipboard'); }
+function toast(msg, kind = "info") {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "fixed bottom-6 right-6 border rounded px-4 py-2 text-sm shadow-lg z-50 " +
+    (kind === "ok"  ? "bg-surface border-brand text-brand" :
+     kind === "err" ? "bg-surface border-red-700 text-red-400" :
+                      "bg-surface border-border text-zinc-200");
+  el.classList.remove("hidden");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.add("hidden"), 2600);
 }
 
-function toggleCard(id) {
-  const body = qs('body-' + id);
-  const chev = qs('chev-' + id);
-  if (!body) return;
-  const open = body.classList.toggle('open');
-  chev?.classList.toggle('open', open);
+function joinFields(row, fields) {
+  return fields
+    .map(f => row[f])
+    .filter(v => v != null && String(v).trim() !== "" && v !== "Not required")
+    .join(" · ");
 }
 
-function fieldsToQueryString(fields, prefix) {
-  const params = new URLSearchParams();
-  fields.forEach(f => {
-    const el = qs(`${prefix}-${f}`);
-    if (el && el.value.trim()) params.append(f, el.value.trim());
-  });
-  return params.toString() ? '?' + params.toString() : '';
-}
-
-// ─── API calls ───────────────────────────────────────────────────────────
-async function doFetch(res) {
-  const rId = res.id + '-fetch';
-  setLoading('resp-' + rId);
-  const qs_str = fieldsToQueryString(res.fetchFields, 'fetch-' + res.id);
+// ═══════════════════════════════════════════════════════════
+// Connection ping
+// ═══════════════════════════════════════════════════════════
+async function ping() {
   try {
-    const r = await fetch(baseUrl() + res.prefix + '/' + qs_str);
-    const data = r.status === 204 ? null : await r.json();
-    setResponse('resp-' + rId, r.status, data);
-  } catch(e) { setResponse('resp-' + rId, 0, { error: e.message }); }
+    const r = await fetch(`${API}/`);
+    $("conn").textContent = r.ok ? "● connected" : `● error ${r.status}`;
+    $("conn").className   = r.ok ? "text-xs text-brand" : "text-xs text-red-400";
+  } catch {
+    $("conn").textContent = "● offline";
+    $("conn").className   = "text-xs text-red-400";
+  }
 }
 
-async function doLookup(res) {
-  const rId = res.id + '-lookup';
-  setLoading('resp-' + rId);
-  const qs_str = fieldsToQueryString(res.lookupFields, 'lookup-' + res.id);
+// ═══════════════════════════════════════════════════════════
+// Stepper
+// ═══════════════════════════════════════════════════════════
+function renderStepper() {
+  $("stepper").innerHTML = STEPS.map((s, i) => {
+    const isActive = i === stepIdx;
+    const isDone   = !!selected[s.key];
+    const tone     = isActive
+      ? "bg-brand text-black border-brand"
+      : isDone
+        ? "border-brand text-brand bg-panel"
+        : "border-border text-zinc-400 bg-panel hover:text-white";
+    return `
+      <button onclick="goToStep(${i})"
+              class="px-3 py-2 rounded border text-xs flex items-center gap-2 transition ${tone}">
+        <span class="w-5 h-5 rounded-full border ${isActive ? 'border-black' : (isDone ? 'border-brand' : 'border-zinc-600')} flex items-center justify-center text-[10px]">
+          ${isDone ? "✓" : (i + 1)}
+        </span>
+        <span class="font-bold uppercase tracking-wider">${s.label}</span>
+        <span class="text-[10px] opacity-70">${s.route}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+function goToStep(i) {
+  if (i < 0 || i >= STEPS.length) return;
+  stepIdx = i;
+  loadStep();
+}
+
+$("btn-prev").addEventListener("click", () => goToStep(stepIdx - 1));
+$("btn-next").addEventListener("click", () => goToStep(stepIdx + 1));
+
+// ═══════════════════════════════════════════════════════════
+// Step loading
+// ═══════════════════════════════════════════════════════════
+async function loadStep() {
+  const step = STEPS[stepIdx];
+  $("step-title").textContent = step.label;
+  $("step-route").textContent = `Source: ${step.route}`;
+  $("picker-search").value = "";
+  $("picker-list").innerHTML =
+    `<div class="text-zinc-600 text-xs p-4">Loading components…</div>`;
+
+  // Disable nav buttons at edges
+  $("btn-prev").disabled = stepIdx === 0;
+  $("btn-prev").classList.toggle("opacity-30", stepIdx === 0);
+  $("btn-next").disabled = stepIdx === STEPS.length - 1;
+  $("btn-next").classList.toggle("opacity-30", stepIdx === STEPS.length - 1);
+
+  renderStepper();
+  renderSummary();
+
   try {
-    const r = await fetch(baseUrl() + res.prefix + '/lookup' + qs_str);
-    const data = r.status === 204 ? null : await r.json();
-    setResponse('resp-' + rId, r.status, data);
-  } catch(e) { setResponse('resp-' + rId, 0, { error: e.message }); }
+    if (!cache[step.route]) {
+      const res = await fetch(`${API}${step.route}/`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      cache[step.route] = await res.json();
+    }
+    const rows = Array.isArray(cache[step.route]) ? cache[step.route] : [];
+    filteredRows = rows;
+    renderList();
+    renderSpec(selected[step.key] || rows[0] || null);
+  } catch (e) {
+    $("picker-list").innerHTML =
+      `<div class="text-red-400 text-xs p-4">⚠ Failed to load: ${escHtml(e.message)}</div>`;
+    $("picker-count").textContent = "—";
+    renderSpec(null);
+  }
 }
 
-async function doUpdate(res) {
-  const rId = res.id + '-update';
-  setLoading('resp-' + rId);
-  const idEl = qs('update-id-' + res.id);
-  const id = idEl?.value.trim();
-  if (!id) { setResponse('resp-' + rId, 0, { error: 'ID is required' }); return; }
-  const body = {};
-  res.updateFields.forEach(f => {
-    const el = qs('upd-' + res.id + '-' + f);
-    if (el && el.value.trim()) body[f] = el.value.trim();
-  });
-  try {
-    const r = await fetch(baseUrl() + res.prefix + '/' + id, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const data = r.status === 204 ? null : await r.json();
-    setResponse('resp-' + rId, r.status, data);
-  } catch(e) { setResponse('resp-' + rId, 0, { error: e.message }); }
-}
+// ═══════════════════════════════════════════════════════════
+// List rendering
+// ═══════════════════════════════════════════════════════════
+function renderList() {
+  const step = STEPS[stepIdx];
+  const list = $("picker-list");
+  const total = (cache[step.route] || []).length;
 
-async function doDelete(res) {
-  const rId = res.id + '-delete';
-  setLoading('resp-' + rId);
-  const idEl = qs('delete-id-' + res.id);
-  const id = idEl?.value.trim();
-  if (!id) { setResponse('resp-' + rId, 0, { error: 'ID is required' }); return; }
-  try {
-    const r = await fetch(baseUrl() + res.prefix + '/' + id, { method: 'DELETE' });
-    if (r.status === 204) { setResponse('resp-' + rId, 204, null); }
-    else { const data = await r.json(); setResponse('resp-' + rId, r.status, data); }
-  } catch(e) { setResponse('resp-' + rId, 0, { error: e.message }); }
-}
+  if (!filteredRows.length) {
+    list.innerHTML =
+      `<div class="text-zinc-600 text-xs p-4 italic">No components match.</div>`;
+    $("picker-count").textContent = `0 of ${total}`;
+    return;
+  }
 
-// ─── Render ───────────────────────────────────────────────────────────────
-function renderFieldGrid(fields, idPrefix) {
-  return `<div class="field-grid">` +
-    fields.map(f => `
-      <div>
-        <label>${f}</label>
-        <input type="text" id="${idPrefix}-${f}" placeholder="optional" />
-      </div>
-    `).join('') +
-  `</div>`;
-}
-
-function renderResponseBox(rId) {
-  return `<div class="response-box" id="resp-${rId}" style="display:none;"></div>`;
-}
-
-function renderEndpoint(cardId, method, path, summary, bodyHtml, onExec) {
-  const badgeClass = { GET: 'badge-get', PATCH: 'badge-patch', DELETE: 'badge-delete' }[method] || 'badge-get';
-  return `
-    <div class="endpoint-card">
-      <div class="endpoint-header" onclick="toggleCard('${cardId}'); qs('resp-${cardId}') && (qs('resp-${cardId}').style.display='block');">
-        <span class="badge ${badgeClass}">${method}</span>
-        <span class="endpoint-path">${path}</span>
-        <span class="endpoint-summary">${summary}</span>
-        <span class="chevron" id="chev-${cardId}">›</span>
-      </div>
-      <div class="endpoint-body" id="body-${cardId}">
-        ${bodyHtml}
-        <div style="display:flex; gap:8px; margin-top:12px; align-items:center;">
-          <button class="btn-execute" onclick="${onExec}">Execute</button>
-          <button class="btn-clear" onclick="clearCard('${cardId}')">Clear</button>
+  list.innerHTML = filteredRows.map(row => {
+    const isSel = selected[step.key]?.id === row.id;
+    const head  = joinFields(row, step.primary)   || "(no label)";
+    const sub   = joinFields(row, step.secondary) || "—";
+    return `
+      <div data-id="${row.id}"
+           class="px-4 py-3 border-b border-border cursor-pointer transition
+                  ${isSel ? 'bg-panel border-l-2 border-l-brand' : 'hover:bg-panel'}">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-sm ${isSel ? 'text-brand font-bold' : 'text-zinc-200'} truncate">${escHtml(head)}</p>
+            <p class="text-zinc-500 text-xs truncate">${escHtml(sub)}</p>
+          </div>
+          ${isSel ? '<span class="text-brand text-xs shrink-0">SELECTED</span>' : ''}
         </div>
-        <div class="response-box" id="resp-${cardId}" style="margin-top:12px; display:none;"></div>
+        <p class="text-zinc-700 text-[10px] mt-1 truncate">${escHtml(row.id)}</p>
       </div>
+    `;
+  }).join("");
+
+  $("picker-count").textContent = `${filteredRows.length} of ${total} components`;
+
+  list.querySelectorAll("[data-id]").forEach(item => {
+    item.addEventListener("click", () => {
+      const row = filteredRows.find(r => r.id === item.dataset.id);
+      if (!row) return;
+      selected[STEPS[stepIdx].key] = row;
+      renderList();
+      renderStepper();
+      renderSummary();
+      renderSpec(row);
+    });
+
+    item.addEventListener("mouseenter", () => {
+      const row = filteredRows.find(r => r.id === item.dataset.id);
+      if (row) renderSpec(row);
+    });
+  });
+}
+
+$("picker-search").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const step = STEPS[stepIdx];
+  const all  = cache[step.route] || [];
+  filteredRows = q
+    ? all.filter(r =>
+        Object.values(r).some(v => v != null && String(v).toLowerCase().includes(q)))
+    : all;
+  renderList();
+});
+
+// ═══════════════════════════════════════════════════════════
+// Spec preview
+// ═══════════════════════════════════════════════════════════
+function renderSpec(row) {
+  const step = STEPS[stepIdx];
+  const box  = $("spec-preview");
+
+  if (!row) {
+    box.innerHTML =
+      `<p class="text-zinc-600 text-xs italic">Nothing to preview.</p>`;
+    return;
+  }
+
+  const isSel = selected[step.key]?.id === row.id;
+
+  box.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-zinc-400 text-xs">${escHtml(joinFields(row, step.primary) || step.label)}</p>
+      <button onclick="pickRow('${row.id}')"
+              class="px-3 py-1 text-xs rounded border ${isSel
+                ? 'border-brand text-brand bg-panel'
+                : 'border-border hover:border-brand hover:text-brand'} transition">
+        ${isSel ? "✓ Selected" : "Use this"}
+      </button>
+    </div>
+    <p class="text-zinc-700 text-[10px] mb-3 break-all">id: ${escHtml(row.id)}</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+      ${step.detail.map(f => {
+        const v = row[f];
+        const empty = v == null || v === "" || v === "Not required";
+        return `
+          <div class="border-b border-border/60 pb-1">
+            <p class="text-zinc-600 text-[10px] uppercase tracking-wider">${f}</p>
+            <p class="text-zinc-${empty ? '600' : '200'} text-xs ${empty ? 'italic' : ''}">
+              ${empty ? '—' : escHtml(String(v))}
+            </p>
+          </div>
+        `;
+      }).join("")}
     </div>
   `;
 }
 
-function clearCard(cardId) {
-  const body = qs('body-' + cardId);
-  if (!body) return;
-  body.querySelectorAll('input, textarea').forEach(el => el.value = '');
-  const resp = qs('resp-' + cardId);
-  if (resp) resp.style.display = 'none';
+function pickRow(id) {
+  const step = STEPS[stepIdx];
+  const row  = (cache[step.route] || []).find(r => r.id === id);
+  if (!row) return;
+  selected[step.key] = row;
+  renderList();
+  renderStepper();
+  renderSummary();
+  renderSpec(row);
+  toast(`${step.label} selected`, "ok");
 }
 
-function buildUI() {
-  const nav = document.getElementById('nav-links');
-  const container = document.getElementById('sections-container');
-
-  RESOURCES.forEach(res => {
-    // Nav
-    const group = document.createElement('div');
-    group.innerHTML = `
-      <div class="nav-group-label">${res.label.replace('Repository','')}</div>
-      <a class="nav-item" onclick="scrollTo('${res.id}')"><span class="badge badge-get">GET</span>fetch</a>
-      <a class="nav-item" onclick="scrollTo('${res.id}')"><span class="badge badge-get">GET</span>lookup</a>
-      <a class="nav-item" onclick="scrollTo('${res.id}')"><span class="badge badge-patch">PATCH</span>update</a>
-      <a class="nav-item" onclick="scrollTo('${res.id}')"><span class="badge badge-delete">DEL</span>delete</a>
-    `;
-    nav.appendChild(group);
-
-    // Section
-    const section = document.createElement('section');
-    section.id = 'section-' + res.id;
-    section.style.marginBottom = '44px';
-
-    const fetchCard = renderEndpoint(
-      res.id + '-fetch', 'GET', res.prefix + '/', 'Fetch filtered list',
-      renderFieldGrid(res.fetchFields, 'fetch-' + res.id),
-      `doFetch(RESOURCES.find(r=>r.id==='${res.id}'))`
-    );
-
-    const lookupCard = renderEndpoint(
-      res.id + '-lookup', 'GET', res.prefix + '/lookup', 'Single record lookup',
-      renderFieldGrid(res.lookupFields, 'lookup-' + res.id),
-      `doLookup(RESOURCES.find(r=>r.id==='${res.id}'))`
-    );
-
-    const updateBody = `
-      <div style="margin-bottom:10px;">
-        <label>record id *</label>
-        <input type="text" id="update-id-${res.id}" placeholder="UUID required" />
+// ═══════════════════════════════════════════════════════════
+// Summary
+// ═══════════════════════════════════════════════════════════
+function renderSummary() {
+  $("summary").innerHTML = STEPS.map((s, i) => {
+    const row = selected[s.key];
+    const head = row ? (joinFields(row, s.primary) || "(no label)") : "Not selected";
+    const sub  = row ? (joinFields(row, s.secondary) || "") : "";
+    return `
+      <div onclick="goToStep(${i})"
+           class="border ${row ? 'border-brand/50' : 'border-border'} rounded p-3 cursor-pointer hover:bg-panel transition">
+        <div class="flex items-center justify-between">
+          <p class="text-zinc-500 text-[10px] uppercase tracking-wider">${s.label}</p>
+          <span class="text-[10px] ${row ? 'text-brand' : 'text-zinc-600'}">${row ? '✓' : `STEP ${i + 1}`}</span>
+        </div>
+        <p class="${row ? 'text-zinc-200' : 'text-zinc-600 italic'} text-xs mt-1 truncate">${escHtml(head)}</p>
+        ${sub ? `<p class="text-zinc-600 text-[10px] mt-0.5 truncate">${escHtml(sub)}</p>` : ""}
       </div>
-      <div style="font-size:10px; color:var(--muted); margin-bottom:8px; font-family:'IBM Plex Mono',monospace;">— fields to update (leave blank to skip) —</div>
-      ${renderFieldGrid(res.updateFields, 'upd-' + res.id)}
     `;
-    const updateCard = renderEndpoint(
-      res.id + '-update', 'PATCH', res.prefix + '/{id}', 'Partial field update',
-      updateBody,
-      `doUpdate(RESOURCES.find(r=>r.id==='${res.id}'))`
-    );
+  }).join("");
 
-    const deleteBody = `
-      <div>
-        <label>record id *</label>
-        <input type="text" id="delete-id-${res.id}" placeholder="UUID required" />
-      </div>
-      <div style="font-size:10px; color:#f87171; margin-top:8px; font-family:'IBM Plex Mono',monospace;">⚠ This action is permanent and cannot be undone.</div>
-    `;
-    const deleteCard = renderEndpoint(
-      res.id + '-delete', 'DELETE', res.prefix + '/{id}', 'Hard delete record',
-      deleteBody,
-      `doDelete(RESOURCES.find(r=>r.id==='${res.id}'))`
-    );
-
-    section.innerHTML = `
-      <div class="section-title">${res.label}</div>
-      ${fetchCard}
-      ${lookupCard}
-      ${updateCard}
-      ${deleteCard}
-    `;
-    container.appendChild(section);
-  });
+  const allPicked = STEPS.every(s => selected[s.key]);
+  $("btn-save").disabled = !allPicked;
+  $("save-hint").textContent = allPicked
+    ? "Ready to save."
+    : `${STEPS.filter(s => !selected[s.key]).length} component(s) still to pick.`;
 }
 
-function scrollTo(id) {
-  const el = document.getElementById('section-' + id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-buildUI();
-
-// Active nav on scroll
-const main = document.querySelector('main');
-main.addEventListener('scroll', () => {
-  const sections = RESOURCES.map(r => document.getElementById('section-' + r.id));
-  let active = null;
-  sections.forEach(s => {
-    if (s && s.getBoundingClientRect().top < 120) active = s.id.replace('section-', '');
-  });
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  if (active) {
-    const items = document.querySelectorAll('.nav-item');
-    items.forEach(item => {
-      if (item.getAttribute('onclick')?.includes(active)) item.classList.add('active');
-    });
-  }
+// ═══════════════════════════════════════════════════════════
+// Save / Reset
+// ═══════════════════════════════════════════════════════════
+$("btn-save").addEventListener("click", saveConfig);
+$("btn-reset").addEventListener("click", () => {
+  if (!confirm("Clear all current selections?")) return;
+  resetAll();
 });
+
+async function saveConfig() {
+  const payload = {};
+  STEPS.forEach(s => { payload[s.payloadKey] = selected[s.key].id; });
+
+  const btn = $("btn-save");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  try {
+    const res = await fetch(`${API}/pump-config/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const detail = typeof err.detail === "string"
+        ? err.detail
+        : Array.isArray(err.detail)
+          ? err.detail.map(d => `${(d.loc || []).join(".")}: ${d.msg}`).join(" · ")
+          : `HTTP ${res.status}`;
+      throw new Error(detail);
+    }
+    const saved = await res.json();
+    $("result-body").textContent = JSON.stringify(saved, null, 2);
+    $("result-modal").classList.remove("hidden");
+    toast("Pump config saved", "ok");
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save Pump Config";
+  }
+}
+
+function closeResult() {
+  $("result-modal").classList.add("hidden");
+}
+
+function resetAll() {
+  Object.keys(selected).forEach(k => delete selected[k]);
+  stepIdx = 0;
+  loadStep();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════════════════
+window.addEventListener("DOMContentLoaded", () => {
+  ping();
+  renderStepper();
+  renderSummary();
+  loadStep();
+});
+
+// Expose handlers used in inline onclick attributes
+window.goToStep   = goToStep;
+window.pickRow    = pickRow;
+window.closeResult = closeResult;
+window.resetAll   = resetAll;
 </script>
 </body>
 </html>

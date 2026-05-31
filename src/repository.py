@@ -17,9 +17,7 @@ Usage example:
 from __future__ import annotations
 
 import uuid
-from typing import Any, List, Optional
-
-from src.models import BasePlate, Impeller, Options, PumpConfig, PumpInfo, TestDocumentation
+from typing import Any, List, Optionalfrom src.models import BasePlate, Impeller, Options, PumpConfig, PumpInfo, TestDocumentation
 
 
 # ---------------------------------------------------------------------------
@@ -28,6 +26,11 @@ from src.models import BasePlate, Impeller, Options, PumpConfig, PumpInfo, TestD
 
 class PumpInfoRepository:
     """CRUD repository for PumpInfo records."""
+
+    @staticmethod
+    async def create(**kwargs: Any) -> PumpInfo:
+        """Create a new PumpInfo record from the supplied fields."""
+        return await PumpInfo.create(**kwargs)
 
     @staticmethod
     async def fetch(
@@ -132,6 +135,11 @@ class ImpellerRepository:
     """CRUD repository for Impeller records."""
 
     @staticmethod
+    async def create(**kwargs: Any) -> Impeller:
+        """Create a new Impeller record from the supplied fields."""
+        return await Impeller.create(**kwargs)
+
+    @staticmethod
     async def fetch(
         id: Optional[uuid.UUID] = None,
         impeller_range: Optional[str] = None,
@@ -196,6 +204,11 @@ class ImpellerRepository:
 
 class BasePlateRepository:
     """CRUD repository for BasePlate records."""
+
+    @staticmethod
+    async def create(**kwargs: Any) -> BasePlate:
+        """Create a new BasePlate record from the supplied fields."""
+        return await BasePlate.create(**kwargs)
 
     @staticmethod
     async def fetch(
@@ -277,6 +290,11 @@ class BasePlateRepository:
 
 class OptionsRepository:
     """CRUD repository for Options records."""
+
+    @staticmethod
+    async def create(**kwargs: Any) -> Options:
+        """Create a new Options record from the supplied fields."""
+        return await Options.create(**kwargs)
 
     @staticmethod
     async def fetch(
@@ -364,6 +382,11 @@ class OptionsRepository:
 
 class TestDocumentationRepository:
     """CRUD repository for TestDocumentation records."""
+
+    @staticmethod
+    async def create(**kwargs: Any) -> TestDocumentation:
+        """Create a new TestDocumentation record from the supplied fields."""
+        return await TestDocumentation.create(**kwargs)
 
     @staticmethod
     async def fetch(
@@ -460,6 +483,25 @@ class PumpConfigRepository:
         "options",
         "test_documentation",
     )
+
+    @staticmethod
+    async def create(
+        pump_info_id: uuid.UUID,
+        impeller_id: uuid.UUID,
+        base_plate_id: uuid.UUID,
+        options_id: uuid.UUID,
+        test_documentation_id: uuid.UUID,
+    ) -> PumpConfig:
+        """Create a new PumpConfig record. All FK ids are required."""
+        record = await PumpConfig.create(
+            pump_info_id=pump_info_id,
+            impeller_id=impeller_id,
+            base_plate_id=base_plate_id,
+            options_id=options_id,
+            test_documentation_id=test_documentation_id,
+        )
+        await record.fetch_related(*PumpConfigRepository._PREFETCH)
+        return record
 
     @staticmethod
     async def fetch(

@@ -41,12 +41,17 @@ register_tortoise(
 )
 app.add_middleware(
     CORSMiddleware,
+    # Explicit origins (kept for clarity). Use "null" so the dashboard works
+    # when opened directly from disk via file:// (browsers send Origin: null).
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:5174",
-        "http://127.0.0.1:5500"
+        "http://127.0.0.1:5500",
+        "null",
     ],
+    # Match any localhost / 127.0.0.1 port so any static server works in dev.
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

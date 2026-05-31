@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pump Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand:   "#c8f135", /* yellow-green accent */
+            surface: "#1a1a1a",
+            panel:   "#111111",
+            border:  "#2a2a2a",
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Slim scrollbar to match the dark theme */
+    ::-webkit-scrollbar        { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track  { background: transparent; }
+    ::-webkit-scrollbar-thumb  { background: #2a2a2a; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+  </style>
+</head>
+<body class="bg-panel text-white font-mono flex h-screen overflow-hidden">
+
+  <!-- ─── Sidebar ─────────────────────────────────────────── -->
+  <aside class="w-56 bg-surface border-r border-border flex flex-col shrink-0">
+    <div class="px-5 py-6 border-b border-border">
+      <p class="text-brand font-bold text-sm tracking-widest uppercase">Pump Admin</p>
+      <p class="text-zinc-500 text-xs mt-1">Configuration Manager</p>
+    </div>
+
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <!-- Nav items injected by renderNav() -->
+    </nav>
+
+    <div class="px-4 py-3 border-t border-border">
+      <p class="text-zinc-600 text-xs">API Base URL</p>
+      <p class="text-zinc-400 text-xs truncate" id="api-url-display"></p>
+    </div>
+  </aside>
+
+  <!-- ─── Main ────────────────────────────────────────────── -->
+  <main class="flex-1 overflow-y-auto p-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold" id="page-title">Pump Info</h1>
+        <p class="text-zinc-500 text-sm" id="page-route">/pump-info</p>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="loadTable()"
+                class="px-4 py-2 border border-border text-sm rounded hover:bg-surface transition">
+          ↺ Refresh
+        </button>
+        <button onclick="openCreateModal()"
+                class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">
+          + New Record
+        </button>
+      </div>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6" id="stat-cards"></div>
+
+    <!-- Filter + Export -->
+    <div class="flex items-center gap-3 mb-4 flex-wrap">
+      <input id="search-input"
+             type="text"
+             placeholder="Filter rows (matches any visible value)…"
+             class="flex-1 min-w-[220px] bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-brand"
+             oninput="handleSearch(this.value)" />
+      <button onclick="exportJSON()"
+              class="px-4 py-2 bg-surface border border-border text-sm font-bold rounded hover:bg-zinc-800 transition">
+        Export JSON
+      </button>
+      <span class="text-zinc-500 text-sm" id="record-count">0 of 0 records</span>
+    </div>
+
+    <!-- Table -->
+    <div class="border border-border rounded overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-surface text-zinc-400 text-xs uppercase tracking-wider">
+            <tr id="table-head"></tr>
+          </thead>
+          <tbody id="table-body" class="divide-y divide-border">
+            <tr><td colspan="99" class="text-center py-10 text-zinc-600">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="bg-surface px-4 py-2 border-t border-border text-zinc-500 text-xs flex justify-between">
+        <span id="table-footer">—</span>
+        <span id="last-updated">—</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- ─── Modal ───────────────────────────────────────────── -->
+  <div id="modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="bg-surface border border-border rounded-lg w-full max-w-lg mx-4 p-6">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="font-bold text-lg" id="modal-title">New Record</h2>
+        <button onclick="closeModal()" class="text-zinc-500 hover:text-white text-xl">✕</button>
+      </div>
+      <form id="modal-form" class="space-y-3 max-h-[60vh] overflow-y-auto pr-1" onsubmit="event.preventDefault(); submitForm();">
+        <!-- Fields injected by buildForm() -->
+      </form>
+      <div class="flex justify-end gap-3 mt-5">
+        <button onclick="closeModal()"
+                class="px-4 py-2 border border-border rounded text-sm hover:bg-zinc-800 transition">Cancel</button>
+        <button onclick="submitForm()"
+                class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Toast ───────────────────────────────────────────── -->
+  <div id="toast"
+       class="hidden fixed bottom-6 right-6 bg-surface border border-border rounded px-4 py-2 text-sm shadow-lg z-50"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// Config
+// ═══════════════════════════════════════════════════════════
+const API = "http://127.0.0.1:8000";
+
+const RESOURCES = [
+  {
+    label: "Pump Info",
+    route: "/pump-info",
+    columns: ["id", "series", "size", "pump_material", "shaft_configuration", "casing_metal"],
+    formFields: [
+      "series","size","pump_material","shaft_configuration","casing_metal",
+      "casing_drain","casing_tap","flange_configuration","spot_facing",
+      "casing_wear_ring","tack_weld_wear_ring","casing_mounting","hardware",
+      "seal_chamber_config","shipping_gasket","cradle_material"
+    ],
+  },
+  {
+    label: "Impellers",
+    route: "/impeller",
+    columns: ["id", "impeller_range", "impeller_trim", "impeller_balance", "impeller_material"],
+    formFields: ["impeller_range","impeller_trim","impeller_balance","impeller_material","impeller_wear_ring_material"],
+  },
+  {
+    label: "Base Plates",
+    route: "/base-plate",
+    columns: ["id", "baseplate_type", "baseplate_material", "drip_pan"],
+    formFields: ["baseplate_type","baseplate_material","drip_pan","allignment_lugs","lifting_lugs",
+                 "leveling_screws","grounding_lugs","grout_hole","isolation_pads","stilts"],
+  },
+  {
+    label: "Options",
+    route: "/options",
+    columns: ["id", "coupling_type", "coupling_guard", "oil_options", "lubrication_options"],
+    formFields: ["coupling_type","coupling_guard","auxillary_nameplate","crating","oil_options",
+                 "bearing_frame_cooling","lubrication_options","oil_seat","sight_gauge",
+                 "magnetic_drain","expansion_chamber"],
+  },
+  {
+    label: "Test Docs",
+    route: "/test-documentation",
+    columns: ["id", "performance_testing", "hydro_testing", "vibration", "sound_level"],
+    formFields: ["performance_testing","hydro_testing","vibration","sound_level","general_inspection",
+                 "documenttation_1","documenttation_2","documenttation_3","documenttation_4",
+                 "documenttation_5","documenttation_6"],
+  },
+  {
+    label: "Pump Configs",
+    route: "/pump-config",
+    columns: ["id", "pump_info", "impeller", "base_plate", "options", "test_documentation"],
+    // How to render each nested-object column in the table. Each entry returns
+    // a short human label built from a couple of useful fields on the relation.
+    nestedColumns: {
+      pump_info:          ["series", "size", "pump_material"],
+      impeller:           ["impeller_range", "impeller_trim", "impeller_material"],
+      base_plate:         ["baseplate_type", "baseplate_material"],
+      options:            ["coupling_type", "oil_options"],
+      test_documentation: ["performance_testing", "hydro_testing"],
+    },
+    formFields: ["pump_info_id","impeller_id","base_plate_id","option_id","test_documentation_id"],
+    // Foreign-key fields rendered as searchable dropdowns instead of free-text.
+    // `route`  – endpoint to load the picklist from
+    // `labelCols` – fields concatenated to form the human-readable label per row
+    foreignKeys: {
+      pump_info_id:          { route: "/pump-info",          labelCols: ["series", "size", "pump_material"] },
+      impeller_id:           { route: "/impeller",           labelCols: ["impeller_range", "impeller_trim", "impeller_material"] },
+      base_plate_id:         { route: "/base-plate",         labelCols: ["baseplate_type", "baseplate_material", "drip_pan"] },
+      option_id:             { route: "/options",            labelCols: ["coupling_type", "oil_options", "lubrication_options"] },
+      test_documentation_id: { route: "/test-documentation", labelCols: ["performance_testing", "hydro_testing", "vibration"] },
+    },
+  },
+];
+
+let active   = RESOURCES[0];
+let allRows  = [];
+let stats    = {};         // { route: count }
+let editingId = null;
+let searchTimeout;
+
+// ═══════════════════════════════════════════════════════════
+// Tiny helpers
+// ═══════════════════════════════════════════════════════════
+const $ = (id) => document.getElementById(id);
+
+function toast(msg, kind = "info") {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "fixed bottom-6 right-6 border rounded px-4 py-2 text-sm shadow-lg z-50 " +
+    (kind === "ok"  ? "bg-surface border-brand text-brand" :
+     kind === "err" ? "bg-surface border-red-700 text-red-400" :
+                      "bg-surface border-border text-zinc-200");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.add("hidden"), 2400);
+  el.classList.remove("hidden");
+}
+
+function escAttr(s) { return s == null ? "" : String(s).replace(/"/g, "&quot;"); }
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// ═══════════════════════════════════════════════════════════
+// Navigation
+// ═══════════════════════════════════════════════════════════
+function renderNav() {
+  const nav = document.querySelector("nav");
+  $("api-url-display").textContent = API;
+
+  nav.innerHTML = RESOURCES.map(r => `
+    <button
+      onclick="switchResource('${r.route}')"
+      class="w-full text-left px-3 py-2 rounded text-sm transition
+        ${r.route === active.route
+          ? 'bg-brand text-black font-bold'
+          : 'text-zinc-400 hover:bg-panel hover:text-white'}"
+    >
+      • ${r.label}
+    </button>
+  `).join("");
+}
+
+function switchResource(route) {
+  active = RESOURCES.find(r => r.route === route);
+  $("page-title").textContent = active.label;
+  $("page-route").textContent = active.route;
+  $("search-input").value = "";
+  renderNav();
+  renderStatCards();
+  loadTable();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Stat cards
+// ═══════════════════════════════════════════════════════════
+function renderStatCards() {
+  const container = $("stat-cards");
+  container.innerHTML = RESOURCES.map(r => `
+    <div onclick="switchResource('${r.route}')"
+         class="cursor-pointer border rounded p-3 transition
+           ${r.route === active.route
+             ? 'border-brand bg-surface'
+             : 'border-border bg-surface hover:border-zinc-600'}">
+      <p class="text-zinc-400 text-xs uppercase tracking-wider">${r.label}</p>
+      <div class="w-6 h-0.5 bg-brand my-2"></div>
+      <div class="flex items-center justify-between">
+        <p class="text-zinc-500 text-xs">${r.route}</p>
+        <p class="text-brand text-sm font-bold">${stats[r.route] ?? "—"}</p>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function loadAllStats() {
+  await Promise.all(RESOURCES.map(async r => {
+    try {
+      const res = await fetch(`${API}${r.route}/`);
+      if (res.ok) {
+        const data = await res.json();
+        stats[r.route] = Array.isArray(data) ? data.length : 0;
+      } else {
+        stats[r.route] = "—";
+      }
+    } catch { stats[r.route] = "—"; }
+  }));
+  renderStatCards();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Table
+// ═══════════════════════════════════════════════════════════
+async function loadTable(search = "") {
+  const url = search
+    ? `${API}${active.route}/?search=${encodeURIComponent(search)}`
+    : `${API}${active.route}/`;
+
+  const tbody = $("table-body");
+  tbody.innerHTML = `<tr><td colspan="99" class="text-center py-10 text-zinc-600">Loading…</td></tr>`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    allRows = await res.json();
+    if (!Array.isArray(allRows)) allRows = [];
+    stats[active.route] = allRows.length;
+    renderStatCards();
+    renderTable(allRows);
+    $("last-updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    allRows = [];
+    tbody.innerHTML = `
+      <tr><td colspan="99" class="text-center py-10 text-zinc-600">
+        ⚠ failed to load · ${escHtml(err.message)}
+      </td></tr>`;
+    $("table-footer").textContent =
+      `${active.label.replace(/\s/g, "")}Repository · 0 total`;
+    toast(`Failed to load: ${err.message}`, "err");
+  }
+}
+
+function renderTable(rows) {
+  const thead = $("table-head");
+  const tbody = $("table-body");
+  const cols = active.columns;
+
+  thead.innerHTML = [...cols, "actions"].map(c => `
+    <th class="px-4 py-3 text-left">${c.toUpperCase()}</th>
+  `).join("");
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="99" class="text-center py-10 text-zinc-600">No records found.</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(row => `
+      <tr class="hover:bg-surface transition">
+        ${cols.map(c => {
+          const v = row[c];
+          const nested = active.nestedColumns?.[c];
+          let display;
+          let titleAttr = "";
+
+          if (nested && v && typeof v === "object") {
+            // Render a nested object (e.g. pump-config.pump_info) as a short label
+            const parts = nested
+              .map(k => v[k])
+              .filter(x => x != null && String(x).trim() !== "" && x !== "Not required");
+            const label = parts.length ? parts.join(" · ") : (v.id ? String(v.id).slice(0,8) + "…" : "—");
+            titleAttr = escAttr(JSON.stringify(v, null, 2));
+            display = `<span class="text-zinc-200">${escHtml(label)}</span>`;
+          } else if (v == null || v === "") {
+            display = '<span class="text-zinc-600">—</span>';
+          } else if (c === "id") {
+            titleAttr = escAttr(v);
+            display = `<span class="text-zinc-500 text-xs cursor-pointer" onclick="copyText('${escAttr(v)}')" title="${escAttr(v)}">${escHtml(String(v).slice(0,8))}…</span>`;
+          } else {
+            titleAttr = escAttr(v);
+            display = escHtml(String(v));
+          }
+
+          return `<td class="px-4 py-3 text-zinc-300 max-w-[220px] truncate" title="${titleAttr}">${display}</td>`;
+        }).join("")}
+        <td class="px-4 py-3">
+          <div class="flex gap-2">
+            <button onclick="openEditModal('${row.id}')"
+                    class="px-2 py-1 text-xs border border-border rounded hover:border-brand hover:text-brand transition">Edit</button>
+            <button onclick="deleteRecord('${row.id}')"
+                    class="px-2 py-1 text-xs border border-red-900 text-red-500 rounded hover:bg-red-900/20 transition">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  const total = rows.length;
+  $("record-count").textContent = `${total} of ${total} records`;
+  $("table-footer").textContent = `${active.label.replace(/\s/g, "")}Repository · ${total} total`;
+}
+
+function copyText(t) {
+  navigator.clipboard?.writeText(t);
+  toast("Copied id to clipboard", "ok");
+}
+
+// ═══════════════════════════════════════════════════════════
+// Search
+// ═══════════════════════════════════════════════════════════
+function handleSearch(value) {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    // Pump configs route doesn't accept ?search — filter client-side instead.
+    if (active.route === "/pump-config") {
+      const q = value.trim().toLowerCase();
+      const filtered = q
+        ? allRows.filter(row =>
+            Object.values(row).some(v => v != null && String(v).toLowerCase().includes(q))
+          )
+        : allRows;
+      renderTable(filtered);
+      $("record-count").textContent = `${filtered.length} of ${allRows.length} records`;
+    } else {
+      loadTable(value);
+    }
+  }, 350);
+}
+
+// ═══════════════════════════════════════════════════════════
+// Delete
+// ═══════════════════════════════════════════════════════════
+async function deleteRecord(id) {
+  if (!confirm("Delete this record? This cannot be undone.")) return;
+
+  try {
+    const res = await fetch(`${API}${active.route}/${id}`, { method: "DELETE" });
+    if (res.ok || res.status === 204) {
+      allRows = allRows.filter(r => r.id !== id);
+      stats[active.route] = allRows.length;
+      renderStatCards();
+      renderTable(allRows);
+      toast("Record deleted", "ok");
+    } else {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+  } catch (e) {
+    toast(`Delete failed: ${e.message}`, "err");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Create / Edit modal
+// ═══════════════════════════════════════════════════════════
+function buildForm(data = {}) {
+  const form = $("modal-form");
+  const fields = active.formFields;
+  const fks = active.foreignKeys || {};
+
+  form.innerHTML = fields.map(f => {
+    const fk = fks[f];
+    if (fk) {
+      // Searchable dropdown for foreign keys
+      const initialId = data[f] ?? "";
+      return `
+        <div class="combobox" data-field="${f}" data-route="${fk.route}" data-label-cols="${fk.labelCols.join(',')}">
+          <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">${f}</label>
+          <div class="relative">
+            <input type="hidden" name="${f}" value="${escAttr(initialId)}" />
+            <input
+              type="text"
+              data-cb-search
+              autocomplete="off"
+              placeholder="Search ${fk.route.replace('/', '')}…"
+              class="w-full bg-panel border border-border rounded px-3 py-2 pr-8 text-sm text-white focus:outline-none focus:border-brand"
+            />
+            <button type="button" data-cb-toggle
+                    class="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-brand text-xs">▾</button>
+            <div data-cb-menu
+                 class="hidden absolute z-10 mt-1 w-full bg-panel border border-border rounded max-h-56 overflow-y-auto shadow-xl">
+            </div>
+          </div>
+          <p data-cb-hint class="text-zinc-600 text-xs mt-1">${initialId ? "Loading current selection…" : ""}</p>
+        </div>
+      `;
+    }
+
+    // Plain text input
+    return `
+      <div>
+        <label class="block text-zinc-400 text-xs mb-1 uppercase tracking-wider">${f}</label>
+        <input
+          name="${f}"
+          value="${escAttr(data[f] ?? "")}"
+          class="w-full bg-panel border border-border rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-brand"
+        />
+      </div>
+    `;
+  }).join("");
+
+  // Wire up every combobox in the form
+  form.querySelectorAll(".combobox").forEach(initCombobox);
+}
+
+// ═══════════════════════════════════════════════════════════
+// Searchable dropdown (combobox) for foreign-key inputs
+// ═══════════════════════════════════════════════════════════
+const FK_CACHE = {}; // { route: [rows] }
+
+async function loadFkOptions(route) {
+  if (FK_CACHE[route]) return FK_CACHE[route];
+  const res = await fetch(`${API}${route}/`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  FK_CACHE[route] = Array.isArray(data) ? data : [];
+  return FK_CACHE[route];
+}
+
+function fkLabel(row, labelCols) {
+  const parts = labelCols
+    .map(c => row[c])
+    .filter(v => v != null && String(v).trim() !== "");
+  return parts.length ? parts.join(" · ") : `(no label)`;
+}
+
+async function initCombobox(el) {
+  const field      = el.dataset.field;
+  const route      = el.dataset.route;
+  const labelCols  = el.dataset.labelCols.split(",");
+  const hidden     = el.querySelector('input[type="hidden"]');
+  const search     = el.querySelector("[data-cb-search]");
+  const toggle     = el.querySelector("[data-cb-toggle]");
+  const menu       = el.querySelector("[data-cb-menu]");
+  const hint       = el.querySelector("[data-cb-hint]");
+
+  let rows        = [];
+  let activeIdx   = -1;
+  let suppressOpen = false;
+
+  function selectRow(row) {
+    hidden.value = row.id;
+    search.value = fkLabel(row, labelCols);
+    hint.textContent = `id: ${row.id}`;
+    closeMenu();
+  }
+
+  function clearSelection() {
+    hidden.value = "";
+    hint.textContent = "";
+  }
+
+  function renderMenu(filter = "") {
+    const q = filter.trim().toLowerCase();
+    const matches = q
+      ? rows.filter(r =>
+          fkLabel(r, labelCols).toLowerCase().includes(q) ||
+          String(r.id).toLowerCase().includes(q))
+      : rows;
+
+    if (!matches.length) {
+      menu.innerHTML = `<div class="px-3 py-2 text-xs text-zinc-600">No matches</div>`;
+      activeIdx = -1;
+      return;
+    }
+
+    menu.innerHTML = matches.slice(0, 100).map((r, i) => `
+      <div data-cb-item data-id="${escAttr(r.id)}" data-idx="${i}"
+           class="px-3 py-2 cursor-pointer text-sm hover:bg-surface ${i === activeIdx ? 'bg-surface' : ''}">
+        <div class="text-zinc-200">${escHtml(fkLabel(r, labelCols))}</div>
+        <div class="text-zinc-600 text-xs">${escHtml(String(r.id))}</div>
+      </div>
+    `).join("");
+
+    menu.querySelectorAll("[data-cb-item]").forEach(item => {
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // keep focus on input so blur doesn't fire first
+        const row = matches[Number(item.dataset.idx)];
+        if (row) selectRow(row);
+      });
+    });
+  }
+
+  function openMenu() {
+    if (suppressOpen) return;
+    menu.classList.remove("hidden");
+    renderMenu(search.value === fkLabel({ id: hidden.value }, []) ? "" : search.value);
+  }
+
+  function closeMenu() {
+    menu.classList.add("hidden");
+    activeIdx = -1;
+  }
+
+  async function ensureLoaded() {
+    if (rows.length) return;
+    hint.textContent = hint.textContent || "Loading…";
+    try {
+      rows = await loadFkOptions(route);
+      // Resolve initial value (when editing)
+      if (hidden.value) {
+        const cur = rows.find(r => r.id === hidden.value);
+        if (cur) {
+          search.value = fkLabel(cur, labelCols);
+          hint.textContent = `id: ${cur.id}`;
+        } else {
+          search.value = "";
+          hint.textContent = `id: ${hidden.value} (not found in ${route})`;
+        }
+      } else {
+        hint.textContent = `${rows.length} options available`;
+      }
+    } catch (e) {
+      hint.textContent = `Failed to load options: ${e.message}`;
+      rows = [];
+    }
+  }
+
+  // Events
+  search.addEventListener("focus", async () => {
+    await ensureLoaded();
+    openMenu();
+  });
+
+  search.addEventListener("input", () => {
+    clearSelection(); // typing invalidates the prior selection until a row is clicked
+    openMenu();
+  });
+
+  search.addEventListener("keydown", (e) => {
+    const items = menu.querySelectorAll("[data-cb-item]");
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (menu.classList.contains("hidden")) return openMenu();
+      activeIdx = Math.min(items.length - 1, activeIdx + 1);
+      renderMenu(search.value);
+      items[activeIdx]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      activeIdx = Math.max(0, activeIdx - 1);
+      renderMenu(search.value);
+      items[activeIdx]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      if (!menu.classList.contains("hidden") && activeIdx >= 0) {
+        e.preventDefault();
+        items[activeIdx]?.dispatchEvent(new MouseEvent("mousedown"));
+      }
+    } else if (e.key === "Escape") {
+      closeMenu();
+    }
+  });
+
+  search.addEventListener("blur", () => {
+    // Delay so a click on a menu item still registers
+    setTimeout(closeMenu, 120);
+  });
+
+  toggle.addEventListener("mousedown", async (e) => {
+    e.preventDefault();
+    if (!menu.classList.contains("hidden")) {
+      closeMenu();
+    } else {
+      search.focus();
+      await ensureLoaded();
+      openMenu();
+    }
+  });
+
+  // Pre-resolve label when editing an existing record
+  if (hidden.value) {
+    suppressOpen = true;
+    await ensureLoaded();
+    suppressOpen = false;
+  }
+}
+
+function openCreateModal() {
+  editingId = null;
+  $("modal-title").textContent = `New ${active.label.replace(/s$/, "")} Record`;
+  buildForm();
+  $("modal").classList.remove("hidden");
+}
+
+async function openEditModal(id) {
+  try {
+    const res = await fetch(`${API}${active.route}/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Pump-config now returns nested objects (pump_info, impeller, …), but the
+    // edit form expects flat ids (pump_info_id, impeller_id, …). Derive them.
+    if (active.route === "/pump-config") {
+      if (data.pump_info?.id)          data.pump_info_id          = data.pump_info.id;
+      if (data.impeller?.id)           data.impeller_id           = data.impeller.id;
+      if (data.base_plate?.id)         data.base_plate_id         = data.base_plate.id;
+      if (data.options?.id)            data.option_id             = data.options.id;
+      if (data.test_documentation?.id) data.test_documentation_id = data.test_documentation.id;
+    }
+
+    editingId = id;
+    $("modal-title").textContent = `Edit Record`;
+    buildForm(data);
+    $("modal").classList.remove("hidden");
+  } catch (e) {
+    toast(`Failed to load record: ${e.message}`, "err");
+  }
+}
+
+function closeModal() {
+  $("modal").classList.add("hidden");
+  editingId = null;
+}
+
+async function submitForm() {
+  const form = $("modal-form");
+  const body = {};
+  [...form.querySelectorAll("input")].forEach(i => {
+    const v = i.value.trim();
+    body[i.name] = v === "" ? null : v;
+  });
+
+  // For PATCH, drop nulls so we don't overwrite existing values with null
+  // (and the API's UpdateSchemas treat omitted fields as "no change").
+  let payload = body;
+  if (editingId) {
+    payload = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== null));
+  }
+
+  const url    = editingId ? `${API}${active.route}/${editingId}` : `${API}${active.route}/`;
+  const method = editingId ? "PATCH" : "POST";
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const detail = typeof err.detail === "string"
+        ? err.detail
+        : Array.isArray(err.detail)
+          ? err.detail.map(d => `${(d.loc || []).join(".")}: ${d.msg}`).join(" · ")
+          : `HTTP ${res.status}`;
+      throw new Error(detail);
+    }
+
+    closeModal();
+    toast(editingId ? "Record updated" : "Record created", "ok");
+    // Invalidate FK cache so newly-created rows show up in pump-config dropdowns
+    delete FK_CACHE[active.route];
+    loadTable();
+    loadAllStats();
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, "err");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Export
+// ═══════════════════════════════════════════════════════════
+function exportJSON() {
+  if (!allRows.length) return toast("Nothing to export", "info");
+  const blob = new Blob([JSON.stringify(allRows, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${active.route.replace("/", "")}-export.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Exported ${allRows.length} records`, "ok");
+}
+
+// ═══════════════════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════════════════
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+
+window.addEventListener("DOMContentLoaded", () => {
+  renderNav();
+  renderStatCards();
+  loadAllStats();
+  loadTable();
+});
+</script>
+</body>
+</html>
