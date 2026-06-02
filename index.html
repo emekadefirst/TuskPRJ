@@ -57,16 +57,39 @@
   <!-- ═══════════════════════════════════════════════════ -->
   <!-- CATALOG                                               -->
   <!-- ═══════════════════════════════════════════════════ -->
-  <div id="view-catalog" class="p-6">
-    <div class="flex items-center gap-3 mb-5 flex-wrap">
-      <input id="catalog-search" type="text"
-             placeholder="Search catalog (series, size, name)…"
-             class="flex-1 min-w-[240px] bg-surface border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
-      <span id="catalog-count" class="text-zinc-500 text-xs">—</span>
-    </div>
-    <div id="catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div class="text-zinc-600 text-xs">Loading catalog…</div>
-    </div>
+  <div id="view-catalog" class="flex flex-col lg:flex-row gap-6 p-6">
+
+    <!-- Left filter sidebar -->
+    <aside class="w-full lg:w-64 shrink-0">
+      <div class="border border-border rounded-lg bg-surface sticky top-[88px]">
+        <div class="px-4 py-3 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold tracking-wider uppercase text-brand">Filters</h3>
+            <p id="filter-active-count" class="text-zinc-500 text-[10px] mt-0.5">No filters applied</p>
+          </div>
+          <button id="filter-clear" onclick="clearFilters()"
+                  class="hidden text-[10px] text-zinc-400 border border-border rounded px-2 py-1 hover:text-red-400 hover:border-red-500 transition">
+            Clear
+          </button>
+        </div>
+        <div id="filter-groups" class="p-3 space-y-3 max-h-[calc(100vh-160px)] overflow-y-auto">
+          <p class="text-zinc-600 text-xs italic">Loading filters…</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right content: search + grid -->
+    <section class="flex-1 min-w-0">
+      <div class="flex items-center gap-3 mb-5 flex-wrap">
+        <input id="catalog-search" type="text"
+               placeholder="Search catalog (series, size, name)…"
+               class="flex-1 min-w-[240px] bg-surface border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+        <span id="catalog-count" class="text-zinc-500 text-xs">—</span>
+      </div>
+      <div id="catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div class="text-zinc-600 text-xs">Loading catalog…</div>
+      </div>
+    </section>
   </div>
 
   <!-- ─── Catalog detail modal ────────────────────────── -->
@@ -331,7 +354,8 @@ async function loadCatalog() {
     if (res.status === 401) return forceLogout();
     if (!res.ok) throw new Error(await parseError(res));
     catalogRows = await res.json();
-    renderCatalog(catalogRows);
+    buildFilters();
+    applyAll();
   } catch (e) {
     grid.innerHTML = `<div class="text-red-400 text-xs">⚠ Failed to load catalog: ${escHtml(e.message)}</div>`;
     $("catalog-count").textContent = "—";
@@ -379,21 +403,151 @@ function renderCatalog(rows) {
   }).join("");
 }
 
-$("catalog-search").addEventListener("input", (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  const filtered = q
-    ? catalogRows.filter(cfg => {
-        const hay = [cfg.name, cfg.pump_info?.series, cfg.pump_info?.size,
-                     cfg.pump_info?.pump_material, cfg.seal?.seal_type, cfg.motor?.power_hp]
-                    .filter(Boolean).join(" ").toLowerCase();
-        return hay.includes(q);
-      })
-    : catalogRows;
-  renderCatalog(filtered);
-});
+$("catalog-search").addEventListener("input", applyAll);
 
 function findConfig(id) {
   return catalogRows.find(c => c.id === id);
+}
+
+// ═══════════════════════════════════════════════════════════
+// Faceted filter sidebar
+// ═══════════════════════════════════════════════════════════
+// One group per component. Each lists the attributes (and their distinct
+// values) we want to expose as dropdown filters. Only attributes that
+// actually have values in the loaded catalog get rendered.
+const FILTER_GROUPS = [
+  {
+    key: "pump_info", label: "Pump Info",
+    attrs: ["series", "size", "pump_material", "shaft_configuration",
+            "casing_metal", "flange_configuration", "casing_wear_ring"],
+  },
+  {
+    key: "seal", label: "Seal",
+    attrs: ["seal_configuration", "seal_type", "inboard_rotating_face",
+            "inboard_stationary_face", "inboard_elastomer"],
+  },
+  {
+    key: "motor", label: "Motor",
+    attrs: ["power_hp", "speed", "voltage", "enclosure", "efficiency"],
+  },
+  {
+    key: "impeller", label: "Impeller",
+    attrs: ["impeller_range", "impeller_trim", "impeller_material", "impeller_wear_ring_material"],
+  },
+  {
+    key: "base_plate", label: "Base Plate",
+    attrs: ["baseplate_type", "baseplate_material", "drip_pan"],
+  },
+  {
+    key: "options", label: "Options",
+    attrs: ["coupling_type", "coupling_guard", "oil_options", "lubrication_options"],
+  },
+  {
+    key: "test_documentation", label: "Test Docs",
+    attrs: ["performance_testing", "hydro_testing", "vibration", "general_inspection"],
+  },
+];
+
+// Active selections: { "groupKey.attr": "selected value" }
+const activeFilters = {};
+
+function _prettyAttr(attr) {
+  return attr.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Distinct, non-empty values for a component attribute across the catalog.
+function distinctValues(groupKey, attr) {
+  const set = new Set();
+  for (const cfg of catalogRows) {
+    const part = cfg[groupKey];
+    if (!part) continue;
+    const v = part[attr];
+    if (v == null || String(v).trim() === "" || v === "Not required" || v === "N/A") continue;
+    set.add(String(v));
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function buildFilters() {
+  const container = $("filter-groups");
+  const sections = FILTER_GROUPS.map(group => {
+    // Build the attribute dropdowns that actually have >1 distinct value.
+    const selects = group.attrs.map(attr => {
+      const values = distinctValues(group.key, attr);
+      if (values.length === 0) return "";
+      const fkey = `${group.key}.${attr}`;
+      const current = activeFilters[fkey] || "";
+      const opts = values.map(v =>
+        `<option value="${escHtml(v)}" ${v === current ? "selected" : ""}>${escHtml(v)}</option>`).join("");
+      return `
+        <div>
+          <label class="block text-zinc-500 text-[10px] uppercase tracking-wider mb-1">${escHtml(_prettyAttr(attr))}</label>
+          <select data-filter="${escHtml(fkey)}"
+                  class="w-full bg-panel border border-border rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-brand">
+            <option value="">Any</option>
+            ${opts}
+          </select>
+        </div>`;
+    }).filter(Boolean).join("");
+
+    if (!selects) return "";
+    return `
+      <details class="border border-border rounded bg-panel/40" open>
+        <summary class="cursor-pointer select-none px-3 py-2 text-xs font-bold uppercase tracking-wider text-zinc-300 hover:text-brand">
+          ${escHtml(group.label)}
+        </summary>
+        <div class="px-3 pb-3 pt-1 space-y-2">${selects}</div>
+      </details>`;
+  }).filter(Boolean).join("");
+
+  container.innerHTML = sections || `<p class="text-zinc-600 text-xs italic">No filterable attributes.</p>`;
+
+  container.querySelectorAll("[data-filter]").forEach(sel => {
+    sel.addEventListener("change", () => {
+      const key = sel.dataset.filter;
+      if (sel.value) activeFilters[key] = sel.value;
+      else delete activeFilters[key];
+      applyAll();
+    });
+  });
+}
+
+function clearFilters() {
+  for (const k of Object.keys(activeFilters)) delete activeFilters[k];
+  $("filter-groups").querySelectorAll("[data-filter]").forEach(sel => { sel.value = ""; });
+  applyAll();
+}
+window.clearFilters = clearFilters;
+
+// Apply the search box + all active facet filters (AND logic) and render.
+function applyAll() {
+  const q = $("catalog-search").value.trim().toLowerCase();
+  const filterEntries = Object.entries(activeFilters);
+
+  const filtered = catalogRows.filter(cfg => {
+    // Text search across a few headline fields.
+    if (q) {
+      const hay = [cfg.name, cfg.pump_info?.series, cfg.pump_info?.size,
+                   cfg.pump_info?.pump_material, cfg.seal?.seal_type, cfg.motor?.power_hp]
+                  .filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    // Every active facet must match.
+    for (const [fkey, want] of filterEntries) {
+      const [groupKey, attr] = fkey.split(".");
+      const part = cfg[groupKey];
+      if (!part || String(part[attr]) !== want) return false;
+    }
+    return true;
+  });
+
+  // Reflect active-filter count in the header.
+  const n = filterEntries.length;
+  $("filter-active-count").textContent =
+    n === 0 ? "No filters applied" : `${n} filter${n === 1 ? "" : "s"} applied`;
+  $("filter-clear").classList.toggle("hidden", n === 0);
+
+  renderCatalog(filtered);
 }
 
 // ─── Catalog detail modal ──────────────────────────
@@ -653,6 +807,7 @@ function forceLogout() {
   renderUserChip(null);
   catalogRows = [];
   lastSavedConfig = null;
+  for (const k of Object.keys(activeFilters)) delete activeFilters[k];
   showAuthGate(true);
 }
 
