@@ -22,7 +22,7 @@ from src.models import User
 # ---------------------------------------------------------------------------
 JWT_SECRET            = "prototype-super-secret-change-me-later"
 JWT_ALGORITHM         = "HS256"
-ACCESS_TOKEN_TTL_MIN  = 60 * 24      # 24 hours
+ACCESS_TOKEN_TTL_MIN  = 15    
 COOKIE_NAME           = "access_token"
 COOKIE_PATH           = "/"
 COOKIE_SAMESITE       = "lax"        # use "none" + secure=True if cross-site over HTTPS

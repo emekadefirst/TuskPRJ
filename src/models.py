@@ -11,7 +11,7 @@ class BaseModel(Model):
     updated_at = fields.DatetimeField(auto_now=True)
 
     class Meta:
-        abstract = True # prvents the compiler from treating the class as a but as a regualar python class 
+        abstract = True # prvents the compiler from treating the class as model but as a regualar python class 
 
 
 class User(BaseModel):
