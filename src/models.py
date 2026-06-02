@@ -31,6 +31,7 @@ class PumpInfo(BaseModel):
     casing_metal = fields.CharField(max_length=255)
     casing_drain = fields.CharField(max_length=255)
     casing_tap = fields.CharField(max_length=255)
+    casing_gasket = fields.CharField(max_length=255, default="Grafoil")
     flange_configuration = fields.CharField(max_length=255)
     spot_facing = fields.CharField(max_length=255, default="Not required")
     casing_wear_ring = fields.CharField(max_length=255)
@@ -43,6 +44,51 @@ class PumpInfo(BaseModel):
 
     class Meta:
         table = "pump_infos"
+
+
+class Seal(BaseModel):
+    """
+    Mechanical seal selection. Mirrors the workbook's Mechanical Seals block
+    (Data Sheet) and the Seal columns of the Config Info / Seal Descriptions tabs.
+    """
+
+    seal_option = fields.CharField(max_length=255, default="Included")
+    seal_mfr = fields.CharField(max_length=255, null=True)
+    seal_configuration = fields.CharField(max_length=255)
+    seal_type = fields.CharField(max_length=255)
+    gland_type = fields.CharField(max_length=255, default="NONE")
+    gland_gasket = fields.CharField(max_length=255, default="NONE")
+    shaft_sleeve_material = fields.CharField(max_length=255, default="NONE")
+    inboard_rotating_face = fields.CharField(max_length=255)
+    inboard_stationary_face = fields.CharField(max_length=255)
+    inboard_elastomer = fields.CharField(max_length=255)
+    outboard_rotating_face = fields.CharField(max_length=255, default="N/A")
+    outboard_stationary_face = fields.CharField(max_length=255, default="N/A")
+    outboard_elastomer = fields.CharField(max_length=255, default="N/A")
+
+    class Meta:
+        table = "seals"
+
+
+class Motor(BaseModel):
+    """
+    Motor selection. Mirrors the Motor Options block of the Data Sheet plus the
+    Recommended HP / Speed / Voltage columns of Config Info.
+    """
+
+    motor_control = fields.CharField(max_length=255, default="N/A")
+    power_hp = fields.CharField(max_length=255)
+    speed = fields.CharField(max_length=255)
+    voltage = fields.CharField(max_length=255)
+    phase_hertz = fields.CharField(max_length=255, default="3PH / 60Hz")
+    frame = fields.CharField(max_length=255, null=True)
+    enclosure = fields.CharField(max_length=255, default="TEFC")
+    efficiency = fields.CharField(max_length=255, default="Premium")
+    c_face_adapter = fields.CharField(max_length=255, default="N/A")
+    manufacturer = fields.CharField(max_length=255, default="N/A")
+
+    class Meta:
+        table = "motors"
 
 
 class Impeller(BaseModel):
@@ -108,12 +154,35 @@ class TestDocumentation(BaseModel):
 
 class PumpConfig(BaseModel):
     """
-    Aggregate model that links all pump component models together via
-    OneToOneField relationships, mirroring the PumpConfig Pydantic model.
+    Aggregate model that links pump component models together.
+
+    A PumpConfig is either:
+      * a catalog entry (is_catalog=True) imported from the workbook's
+        Config Info tab and orderable as-is, or
+      * a user-built "mix your own" configuration.
+
+    pump_info, seal and motor are always required. impeller, base_plate,
+    options and test_documentation are optional so a config can exist with
+    just the core pump + seal + motor data (as the workbook provides).
     """
+
+    name = fields.CharField(max_length=255, null=True)          # e.g. the workbook "Configuration ID"
+    notes = fields.TextField(null=True)
+    is_catalog = fields.BooleanField(default=False)
+    list_price = fields.DecimalField(max_digits=12, decimal_places=2, null=True)
 
     pump_info = fields.ForeignKeyField(
         "models.PumpInfo",
+        related_name="pump_config",
+        on_delete=fields.CASCADE,
+    )
+    seal = fields.ForeignKeyField(
+        "models.Seal",
+        related_name="pump_config",
+        on_delete=fields.CASCADE,
+    )
+    motor = fields.ForeignKeyField(
+        "models.Motor",
         related_name="pump_config",
         on_delete=fields.CASCADE,
     )
@@ -121,21 +190,25 @@ class PumpConfig(BaseModel):
         "models.Impeller",
         related_name="pump_config",
         on_delete=fields.CASCADE,
+        null=True,
     )
     base_plate = fields.ForeignKeyField(
         "models.BasePlate",
         related_name="pump_config",
         on_delete=fields.CASCADE,
+        null=True,
     )
     options = fields.ForeignKeyField(
         "models.Options",
         related_name="pump_config",
         on_delete=fields.CASCADE,
+        null=True,
     )
     test_documentation = fields.ForeignKeyField(
         "models.TestDocumentation",
         related_name="pump_config",
         on_delete=fields.CASCADE,
+        null=True,
     )
 
     class Meta:
@@ -182,3 +255,38 @@ class OrderItem(BaseModel):
 
     class Meta:
         table = "order_items"
+
+
+# ---------------------------------------------------------------------------
+# Pricing (from the workbook's "Price Lists" tab)
+# ---------------------------------------------------------------------------
+
+
+class PriceList(BaseModel):
+    """
+    Base price for a product family + size combination.
+    Source: Price Lists tab (left block) -> key = "<product_family>|<size>".
+    """
+
+    product_family = fields.CharField(max_length=255)
+    size = fields.CharField(max_length=255)
+    base_price = fields.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        table = "price_lists"
+        unique_together = (("product_family", "size"),)
+
+
+class OptionPrice(BaseModel):
+    """
+    Per-option add-on price.
+    Source: Price Lists tab (middle block) -> key = "<field>|<option>".
+    """
+
+    field = fields.CharField(max_length=255)      # e.g. "Material", "Voltage"
+    option = fields.CharField(max_length=255)      # e.g. "Steel", "240V"
+    option_price = fields.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        table = "option_prices"
+        unique_together = (("field", "option"),)

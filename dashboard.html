@@ -218,6 +218,21 @@ const RESOURCES = [
     ],
   },
   {
+    label: "Seals",
+    route: "/seal",
+    columns: ["id", "seal_configuration", "seal_type", "inboard_rotating_face", "inboard_elastomer"],
+    formFields: ["seal_option","seal_mfr","seal_configuration","seal_type","gland_type","gland_gasket",
+                 "shaft_sleeve_material","inboard_rotating_face","inboard_stationary_face","inboard_elastomer",
+                 "outboard_rotating_face","outboard_stationary_face","outboard_elastomer"],
+  },
+  {
+    label: "Motors",
+    route: "/motor",
+    columns: ["id", "power_hp", "speed", "voltage", "enclosure"],
+    formFields: ["motor_control","power_hp","speed","voltage","phase_hertz","frame",
+                 "enclosure","efficiency","c_face_adapter","manufacturer"],
+  },
+  {
     label: "Impellers",
     route: "/impeller",
     columns: ["id", "impeller_range", "impeller_trim", "impeller_balance", "impeller_material"],
@@ -249,27 +264,45 @@ const RESOURCES = [
   {
     label: "Pump Configs",
     route: "/pump-config",
-    columns: ["id", "pump_info", "impeller", "base_plate", "options", "test_documentation"],
-    // How to render each nested-object column in the table. Each entry returns
-    // a short human label built from a couple of useful fields on the relation.
+    columns: ["id", "name", "is_catalog", "list_price", "pump_info", "motor"],
     nestedColumns: {
       pump_info:          ["series", "size", "pump_material"],
+      seal:               ["seal_configuration", "seal_type"],
+      motor:              ["power_hp", "voltage"],
       impeller:           ["impeller_range", "impeller_trim", "impeller_material"],
       base_plate:         ["baseplate_type", "baseplate_material"],
       options:            ["coupling_type", "oil_options"],
       test_documentation: ["performance_testing", "hydro_testing"],
     },
-    formFields: ["pump_info_id","impeller_id","base_plate_id","option_id","test_documentation_id"],
-    // Foreign-key fields rendered as searchable dropdowns instead of free-text.
-    // `route`  – endpoint to load the picklist from
-    // `labelCols` – fields concatenated to form the human-readable label per row
+    formFields: ["name","notes","list_price","pump_info_id","seal_id","motor_id","impeller_id","base_plate_id","option_id","test_documentation_id"],
     foreignKeys: {
       pump_info_id:          { route: "/pump-info",          labelCols: ["series", "size", "pump_material"] },
+      seal_id:               { route: "/seal",               labelCols: ["seal_configuration", "seal_type", "inboard_elastomer"] },
+      motor_id:              { route: "/motor",              labelCols: ["power_hp", "voltage", "speed"] },
       impeller_id:           { route: "/impeller",           labelCols: ["impeller_range", "impeller_trim", "impeller_material"] },
       base_plate_id:         { route: "/base-plate",         labelCols: ["baseplate_type", "baseplate_material", "drip_pan"] },
       option_id:             { route: "/options",            labelCols: ["coupling_type", "oil_options", "lubrication_options"] },
       test_documentation_id: { route: "/test-documentation", labelCols: ["performance_testing", "hydro_testing", "vibration"] },
     },
+    // These fields are optional on the backend; the rest of the FKs are required.
+    optionalFields: ["name","notes","list_price","impeller_id","base_plate_id","option_id","test_documentation_id"],
+  },
+  {
+    label: "Price Lists",
+    route: "/pricing/base-prices",
+    columns: ["id", "product_family", "size", "base_price"],
+    formFields: ["product_family", "size", "base_price"],
+    // Custom pricing endpoints: list via GET, create/upsert via POST. No PATCH/DELETE.
+    noEdit: true,
+    noDelete: true,
+  },
+  {
+    label: "Option Prices",
+    route: "/pricing/option-prices",
+    columns: ["id", "field", "option", "option_price"],
+    formFields: ["field", "option", "option_price"],
+    noEdit: true,
+    noDelete: true,
   },
   {
     label: "Users",
@@ -326,6 +359,12 @@ function escHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
+// Standard resource routes are mounted with a trailing slash (e.g. /pump-info/),
+// but the pricing endpoints are not (/pricing/base-prices). Build URLs accordingly.
+function listUrl(route) {
+  return route.startsWith("/pricing/") ? `${API}${route}` : `${API}${route}/`;
+}
+
 // ═══════════════════════════════════════════════════════════
 // Navigation
 // ═══════════════════════════════════════════════════════════
@@ -358,6 +397,13 @@ function switchResource(route) {
   loadTable();
 }
 
+// Resources whose search must be done client-side (no ?search support on the API).
+function isClientSearch(route) {
+  return route === "/pump-config" ||
+         route === "/pricing/base-prices" ||
+         route === "/pricing/option-prices";
+}
+
 // ═══════════════════════════════════════════════════════════
 // Stat cards
 // ═══════════════════════════════════════════════════════════
@@ -382,7 +428,7 @@ function renderStatCards() {
 async function loadAllStats() {
   await Promise.all(RESOURCES.map(async r => {
     try {
-      const res = await fetch(`${API}${r.route}/`);
+      const res = await fetch(listUrl(r.route));
       if (res.ok) {
         const data = await res.json();
         stats[r.route] = Array.isArray(data) ? data.length : 0;
@@ -398,9 +444,10 @@ async function loadAllStats() {
 // Table
 // ═══════════════════════════════════════════════════════════
 async function loadTable(search = "") {
-  const url = search
-    ? `${API}${active.route}/?search=${encodeURIComponent(search)}`
-    : `${API}${active.route}/`;
+  const useServerSearch = search && !isClientSearch(active.route);
+  const url = useServerSearch
+    ? `${listUrl(active.route)}?search=${encodeURIComponent(search)}`
+    : listUrl(active.route);
 
   const tbody = $("table-body");
   tbody.innerHTML = `<tr><td colspan="99" class="text-center py-10 text-zinc-600">Loading…</td></tr>`;
@@ -467,6 +514,10 @@ function renderTable(rows) {
                       (preview ? `<span class="text-zinc-600 text-[10px] block truncate">${escHtml(preview + more)}</span>` : "");
           } else if (v == null || v === "") {
             display = '<span class="text-zinc-600">—</span>';
+          } else if (typeof v === "boolean") {
+            display = v
+              ? '<span class="text-brand text-xs border border-brand/40 rounded px-2 py-0.5">catalog</span>'
+              : '<span class="text-zinc-500 text-xs border border-border rounded px-2 py-0.5">custom</span>';
           } else if (c === "id") {
             titleAttr = escAttr(v);
             display = `<span class="text-zinc-500 text-xs cursor-pointer" onclick="copyText('${escAttr(v)}')" title="${escAttr(v)}">${escHtml(String(v).slice(0,8))}…</span>`;
@@ -479,11 +530,12 @@ function renderTable(rows) {
         }).join("")}
         <td class="px-4 py-3">
           <div class="flex gap-2">
-            ${active.readOnly ? "" : `
+            ${(active.readOnly || active.noEdit) ? "" : `
             <button onclick="openEditModal('${row.id}')"
                     class="px-2 py-1 text-xs border border-border rounded hover:border-brand hover:text-brand transition">Edit</button>`}
+            ${active.noDelete ? "" : `
             <button onclick="deleteRecord('${row.id}')"
-                    class="px-2 py-1 text-xs border border-red-900 text-red-500 rounded hover:bg-red-900/20 transition">Delete</button>
+                    class="px-2 py-1 text-xs border border-red-900 text-red-500 rounded hover:bg-red-900/20 transition">Delete</button>`}
           </div>
         </td>
       </tr>
@@ -506,12 +558,12 @@ function copyText(t) {
 function handleSearch(value) {
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
-    // Pump configs route doesn't accept ?search — filter client-side instead.
-    if (active.route === "/pump-config") {
+    // Some routes don't accept ?search — filter client-side instead.
+    if (isClientSearch(active.route)) {
       const q = value.trim().toLowerCase();
       const filtered = q
         ? allRows.filter(row =>
-            Object.values(row).some(v => v != null && String(v).toLowerCase().includes(q))
+            JSON.stringify(row).toLowerCase().includes(q)
           )
         : allRows;
       renderTable(filtered);
@@ -621,7 +673,7 @@ const FK_CACHE = {}; // { route: [rows] }
 
 async function loadFkOptions(route) {
   if (FK_CACHE[route]) return FK_CACHE[route];
-  const res = await fetch(`${API}${route}/`);
+  const res = await fetch(listUrl(route));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   FK_CACHE[route] = Array.isArray(data) ? data : [];
@@ -798,10 +850,12 @@ async function openEditModal(id) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
-    // Pump-config now returns nested objects (pump_info, impeller, …), but the
-    // edit form expects flat ids (pump_info_id, impeller_id, …). Derive them.
+    // Pump-config returns nested objects (pump_info, seal, motor, …), but the
+    // edit form expects flat ids (pump_info_id, seal_id, …). Derive them.
     if (active.route === "/pump-config") {
       if (data.pump_info?.id)          data.pump_info_id          = data.pump_info.id;
+      if (data.seal?.id)               data.seal_id               = data.seal.id;
+      if (data.motor?.id)              data.motor_id              = data.motor.id;
       if (data.impeller?.id)           data.impeller_id           = data.impeller.id;
       if (data.base_plate?.id)         data.base_plate_id         = data.base_plate.id;
       if (data.options?.id)            data.option_id             = data.options.id;
@@ -838,7 +892,7 @@ async function submitForm() {
     payload = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== null));
   }
 
-  const url    = editingId ? `${API}${active.route}/${editingId}` : `${API}${active.route}/`;
+  const url    = editingId ? `${API}${active.route}/${editingId}` : listUrl(active.route);
   const method = editingId ? "PATCH" : "POST";
 
   try {

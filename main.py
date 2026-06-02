@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from tortoise.contrib.fastapi import register_tortoise
 
 # Import Defined Routes
-from src.api import pump_info_router, impeller_router, base_plate_router, base_plate_router, options_router, test_documentation_router, pump_config_router, order_router
+from src.api import pump_info_router, impeller_router, base_plate_router, base_plate_router, options_router, test_documentation_router, pump_config_router, order_router, seal_router, motor_router, pricing_router
 from src.auth_router import auth_router, users_router
 
 #make an instance of fastapi that will be used throughout the project
@@ -30,12 +30,15 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(pump_info_router)
+app.include_router(seal_router)
+app.include_router(motor_router)
 app.include_router(impeller_router)
 app.include_router(base_plate_router)
 app.include_router(options_router)
 app.include_router(test_documentation_router)
 app.include_router(pump_config_router)
 app.include_router(order_router)
+app.include_router(pricing_router)
 # -------------------------------------------------
 # DATABASE (TORTOISE ORM)
 # -------------------------------------------------

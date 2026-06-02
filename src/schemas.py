@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
+from decimal import Decimal
 
 
 class UserCreateSchema(BaseModel):
@@ -23,6 +24,7 @@ class PumpInfoSchema(BaseModel):
     casing_metal: str
     casing_drain: str
     casing_tap: str
+    casing_gasket: Optional[str] = "Grafoil"
     flange_configuration: str
     spot_facing: Optional[str] = "Not required"
     casing_wear_ring: str
@@ -35,22 +37,81 @@ class PumpInfoSchema(BaseModel):
 
 
 class PumpInfoUpdateSchema(BaseModel):
-    series: Optional[str]
-    size: Optional[str]
-    pump_material: Optional[str]
-    shaft_configuration: Optional[str]
-    casing_metal: Optional[str]
-    casing_drain: Optional[str]
-    casing_tap: Optional[str]
-    flange_configuration: Optional[str]
-    spot_facing: Optional[str] = "Not required"
-    casing_wear_ring: str
-    tack_weld_wear_ring: Optional[str] = "Not required"
-    casing_mounting: Optional[str] = "Not required"
+    series: Optional[str] = None
+    size: Optional[str] = None
+    pump_material: Optional[str] = None
+    shaft_configuration: Optional[str] = None
+    casing_metal: Optional[str] = None
+    casing_drain: Optional[str] = None
+    casing_tap: Optional[str] = None
+    casing_gasket: Optional[str] = None
+    flange_configuration: Optional[str] = None
+    spot_facing: Optional[str] = None
+    casing_wear_ring: Optional[str] = None
+    tack_weld_wear_ring: Optional[str] = None
+    casing_mounting: Optional[str] = None
     hardware: Optional[str] = None
-    seal_chamber_config: Optional[str] = "Not required"
-    shipping_gasket: Optional[str] = "Not required"
+    seal_chamber_config: Optional[str] = None
+    shipping_gasket: Optional[str] = None
     cradle_material: Optional[str] = None
+
+
+class SealSchema(BaseModel):
+    seal_option: Optional[str] = "Included"
+    seal_mfr: Optional[str] = None
+    seal_configuration: str
+    seal_type: str
+    gland_type: Optional[str] = "NONE"
+    gland_gasket: Optional[str] = "NONE"
+    shaft_sleeve_material: Optional[str] = "NONE"
+    inboard_rotating_face: str
+    inboard_stationary_face: str
+    inboard_elastomer: str
+    outboard_rotating_face: Optional[str] = "N/A"
+    outboard_stationary_face: Optional[str] = "N/A"
+    outboard_elastomer: Optional[str] = "N/A"
+
+
+class SealUpdateSchema(BaseModel):
+    seal_option: Optional[str] = None
+    seal_mfr: Optional[str] = None
+    seal_configuration: Optional[str] = None
+    seal_type: Optional[str] = None
+    gland_type: Optional[str] = None
+    gland_gasket: Optional[str] = None
+    shaft_sleeve_material: Optional[str] = None
+    inboard_rotating_face: Optional[str] = None
+    inboard_stationary_face: Optional[str] = None
+    inboard_elastomer: Optional[str] = None
+    outboard_rotating_face: Optional[str] = None
+    outboard_stationary_face: Optional[str] = None
+    outboard_elastomer: Optional[str] = None
+
+
+class MotorSchema(BaseModel):
+    motor_control: Optional[str] = "N/A"
+    power_hp: str
+    speed: str
+    voltage: str
+    phase_hertz: Optional[str] = "3PH / 60Hz"
+    frame: Optional[str] = None
+    enclosure: Optional[str] = "TEFC"
+    efficiency: Optional[str] = "Premium"
+    c_face_adapter: Optional[str] = "N/A"
+    manufacturer: Optional[str] = "N/A"
+
+
+class MotorUpdateSchema(BaseModel):
+    motor_control: Optional[str] = None
+    power_hp: Optional[str] = None
+    speed: Optional[str] = None
+    voltage: Optional[str] = None
+    phase_hertz: Optional[str] = None
+    frame: Optional[str] = None
+    enclosure: Optional[str] = None
+    efficiency: Optional[str] = None
+    c_face_adapter: Optional[str] = None
+    manufacturer: Optional[str] = None
 
 class ImpellerSchema(BaseModel):
     impeller_range: str
@@ -148,31 +209,93 @@ class TestDocumentationUpdateSchema(BaseModel):
 # This brings together all pump class together to create a larger class
 class PumpConfigSchema(BaseModel):
     pump_info_id: str
-    impeller_id: str
-    base_plate_id: str
-    option_id: str
-    test_documentation_id: str
+    seal_id: str
+    motor_id: str
+    impeller_id: Optional[str] = None
+    base_plate_id: Optional[str] = None
+    option_id: Optional[str] = None
+    test_documentation_id: Optional[str] = None
+    name: Optional[str] = None
+    notes: Optional[str] = None
+    is_catalog: bool = False
+    list_price: Optional[Decimal] = None
 
 class PumpConfigUpdateSchema(BaseModel):
-    pump_info_id: Optional[str]
-    impeller_id: Optional[str]
-    base_plate_id: Optional[str]
-    option_id: Optional[str]
-    test_documentation_id: Optional[str]
+    pump_info_id: Optional[str] = None
+    seal_id: Optional[str] = None
+    motor_id: Optional[str] = None
+    impeller_id: Optional[str] = None
+    base_plate_id: Optional[str] = None
+    option_id: Optional[str] = None
+    test_documentation_id: Optional[str] = None
+    name: Optional[str] = None
+    notes: Optional[str] = None
+    is_catalog: Optional[bool] = None
+    list_price: Optional[Decimal] = None
+
+
+class PriceListSchema(BaseModel):
+    product_family: str
+    size: str
+    base_price: Decimal = Decimal("0")
+
+
+class OptionPriceSchema(BaseModel):
+    field: str
+    option: str
+    option_price: Decimal = Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# Quote / pricing engine (mirrors the workbook's "PX Configurator" math)
+# ---------------------------------------------------------------------------
+
+
+class QuoteRequestSchema(BaseModel):
+    product_family: str
+    size: str
+    # Selected options as {field: option}, e.g. {"Material": "Steel", "Voltage": "240V"}.
+    options: dict[str, str] = Field(default_factory=dict)
+    quantity: int = Field(default=1, ge=1)
+    discount_pct: Decimal = Field(default=Decimal("0"), ge=0, le=100)
+    tax_rate: Decimal = Field(default=Decimal("0"), ge=0, le=100)
+
+
+class QuoteLineSchema(BaseModel):
+    field: str
+    option: str
+    price: Decimal
+
+
+class QuoteResponseSchema(BaseModel):
+    product_family: str
+    size: str
+    quantity: int
+    base_price: Decimal
+    option_price: Decimal
+    unit_list_price: Decimal
+    extended_list_price: Decimal
+    discount_pct: Decimal
+    discount_amount: Decimal
+    subtotal: Decimal
+    tax_rate: Decimal
+    tax: Decimal
+    total_quote: Decimal
+    breakdown: list[QuoteLineSchema]
+    warnings: list[str] = Field(default_factory=list)
 
 
 
 # ---------------------------------------------------------------------------
 # Order / OrderItem
 # ---------------------------------------------------------------------------
-from pydantic import Field
-from decimal import Decimal
 
 
 class OrderItemSchema(BaseModel):
     pump_config_id: str
     quantity: int = Field(default=1, ge=1)
-    unit_price: Decimal = Field(default=Decimal("0"), ge=0)
+    # unit_price is intentionally omitted: the server prices each line from the
+    # pump config's list_price so clients can't set their own prices.
 
 
 class OrderSchema(BaseModel):

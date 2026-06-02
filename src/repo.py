@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from tortoise.expressions import Q
 from typing import Optional
 from argon2 import PasswordHasher
-from src.models import User, BasePlate, Impeller, Options, PumpConfig, PumpInfo, TestDocumentation
+from src.models import User, BasePlate, Impeller, Options, PumpConfig, PumpInfo, TestDocumentation, Seal, Motor
 from src.schemas import (
     ImpellerSchema, ImpellerUpdateSchema,
     BasePlateSchema, BasePlateUpdateSchema,
@@ -10,6 +10,8 @@ from src.schemas import (
     PumpInfoSchema, PumpInfoUpdateSchema,
     TestDocumentationSchema, TestDocumentationUpdateSchema,
     PumpConfigSchema, PumpConfigUpdateSchema,
+    SealSchema, SealUpdateSchema,
+    MotorSchema, MotorUpdateSchema,
     UserCreateSchema, UserUpdateSchema,
 )
 
@@ -125,6 +127,91 @@ class PumpInfoRepo:
         await pump.update_from_dict(data.model_dump(exclude_unset=True))
         await pump.save()
         return pump                                             # fix: return pump not save()
+
+
+class SealRepo:
+    @classmethod
+    async def create(cls, dto: SealSchema):
+        return await Seal.create(**dto.dict())
+
+    @classmethod
+    async def delete(cls, id: str):
+        data = await Seal.get_or_none(id=id)
+        if not data:
+            raise HTTPException(status_code=404, detail="Seal not found")
+        return await data.delete()
+
+    @classmethod
+    async def fetch(cls, id: Optional[str] = None, search: Optional[str] = None):
+        if id is not None:
+            return await Seal.get_or_none(id=id)
+        if search is not None:
+            return await Seal.filter(
+                Q(seal_option__icontains=search) |
+                Q(seal_mfr__icontains=search) |
+                Q(seal_configuration__icontains=search) |
+                Q(seal_type__icontains=search) |
+                Q(gland_type__icontains=search) |
+                Q(gland_gasket__icontains=search) |
+                Q(shaft_sleeve_material__icontains=search) |
+                Q(inboard_rotating_face__icontains=search) |
+                Q(inboard_stationary_face__icontains=search) |
+                Q(inboard_elastomer__icontains=search) |
+                Q(outboard_rotating_face__icontains=search) |
+                Q(outboard_stationary_face__icontains=search) |
+                Q(outboard_elastomer__icontains=search)
+            ).all()
+        return await Seal.all()
+
+    @classmethod
+    async def update(cls, id: str, data: SealUpdateSchema):
+        seal = await Seal.get_or_none(id=id)
+        if seal is None:
+            return None
+        await seal.update_from_dict(data.model_dump(exclude_unset=True))
+        await seal.save()
+        return seal
+
+
+class MotorRepo:
+    @classmethod
+    async def create(cls, dto: MotorSchema):
+        return await Motor.create(**dto.dict())
+
+    @classmethod
+    async def delete(cls, id: str):
+        data = await Motor.get_or_none(id=id)
+        if not data:
+            raise HTTPException(status_code=404, detail="Motor not found")
+        return await data.delete()
+
+    @classmethod
+    async def fetch(cls, id: Optional[str] = None, search: Optional[str] = None):
+        if id is not None:
+            return await Motor.get_or_none(id=id)
+        if search is not None:
+            return await Motor.filter(
+                Q(motor_control__icontains=search) |
+                Q(power_hp__icontains=search) |
+                Q(speed__icontains=search) |
+                Q(voltage__icontains=search) |
+                Q(phase_hertz__icontains=search) |
+                Q(frame__icontains=search) |
+                Q(enclosure__icontains=search) |
+                Q(efficiency__icontains=search) |
+                Q(c_face_adapter__icontains=search) |
+                Q(manufacturer__icontains=search)
+            ).all()
+        return await Motor.all()
+
+    @classmethod
+    async def update(cls, id: str, data: MotorUpdateSchema):
+        motor = await Motor.get_or_none(id=id)
+        if motor is None:
+            return None
+        await motor.update_from_dict(data.model_dump(exclude_unset=True))
+        await motor.save()
+        return motor
 
 
 class ImpellerRepo:
@@ -288,6 +375,52 @@ class TestDocumentationRepo:
         return test_doc
 
 
+# ---------------------------------------------------------------------------
+# Pump config pricing
+# ---------------------------------------------------------------------------
+from decimal import Decimal as _Decimal, ROUND_HALF_UP as _ROUND_HALF_UP
+
+# Transparent, deterministic list price for a pump config:
+#   list_price = BASE + HP * PER_HP + material surcharge
+# Kept in sync with scripts/backfill_prices.py.
+_PRICE_BASE = _Decimal("1200")
+_PRICE_PER_HP = _Decimal("18")
+_MATERIAL_SURCHARGE = {
+    "cast iron": _Decimal("0"),
+    "ductile iron": _Decimal("450"),
+    "(22) ductile iron": _Decimal("600"),
+}
+
+
+def compute_config_price(config: "PumpConfig") -> _Decimal:
+    """Compute a list price from a config's motor HP and pump material."""
+    motor = getattr(config, "motor", None)
+    pump_info = getattr(config, "pump_info", None)
+
+    hp = _Decimal("0")
+    if motor is not None and motor.power_hp:
+        try:
+            hp = _Decimal(str(motor.power_hp).split()[0])
+        except Exception:
+            hp = _Decimal("0")
+
+    material_key = ((getattr(pump_info, "pump_material", "") or "")).strip().lower()
+    surcharge = _MATERIAL_SURCHARGE.get(material_key, _Decimal("200"))
+
+    total = _PRICE_BASE + hp * _PRICE_PER_HP + surcharge
+    return total.quantize(_Decimal("0.01"), rounding=_ROUND_HALF_UP)
+
+
+def money_str(value) -> "str | None":
+    """Format a stored decimal as a plain 2dp string (avoids 3.15E+3 output)."""
+    if value is None:
+        return None
+    try:
+        return str(_Decimal(str(value)).quantize(_Decimal("0.01"), rounding=_ROUND_HALF_UP))
+    except Exception:
+        return str(value)
+
+
 class PumpConfigRepo:
     # Helper: turn a Tortoise model row into a plain dict.
     @staticmethod
@@ -314,9 +447,15 @@ class PumpConfigRepo:
         """Return a PumpConfig as a dict with nested component objects."""
         return {
             "id":         str(config.id),
+            "name":       config.name,
+            "notes":      config.notes,
+            "is_catalog": config.is_catalog,
+            "list_price": money_str(config.list_price),
             "created_at": config.created_at.isoformat() if config.created_at else None,
             "updated_at": config.updated_at.isoformat() if config.updated_at else None,
             "pump_info":          cls._model_to_dict(getattr(config, "pump_info", None)),
+            "seal":               cls._model_to_dict(getattr(config, "seal", None)),
+            "motor":              cls._model_to_dict(getattr(config, "motor", None)),
             "impeller":           cls._model_to_dict(getattr(config, "impeller", None)),
             "base_plate":         cls._model_to_dict(getattr(config, "base_plate", None)),
             "options":            cls._model_to_dict(getattr(config, "options", None)),
@@ -325,17 +464,30 @@ class PumpConfigRepo:
 
     @classmethod
     async def create(cls, dto: PumpConfigSchema):
+        list_price = dto.list_price
         config = await PumpConfig.create(
             pump_info_id=dto.pump_info_id,
+            seal_id=dto.seal_id,
+            motor_id=dto.motor_id,
             impeller_id=dto.impeller_id,
             base_plate_id=dto.base_plate_id,
             options_id=dto.option_id,
             test_documentation_id=dto.test_documentation_id,
+            name=dto.name,
+            notes=dto.notes,
+            is_catalog=dto.is_catalog,
+            list_price=list_price,
         )
         # Re-fetch with relations so the response includes full nested objects.
         await config.fetch_related(
-            "pump_info", "impeller", "base_plate", "options", "test_documentation"
+            "pump_info", "seal", "motor", "impeller",
+            "base_plate", "options", "test_documentation",
         )
+        # Auto-price a freshly built config when no explicit price was given,
+        # so user-built configs are orderable just like catalog ones.
+        if list_price is None:
+            config.list_price = compute_config_price(config)
+            await config.save()
         return cls._serialize(config)
 
     @classmethod
@@ -346,15 +498,33 @@ class PumpConfigRepo:
         return await data.delete()
 
     @classmethod
-    async def fetch(cls, id: Optional[str] = None):
+    async def fetch(
+        cls,
+        id: Optional[str] = None,
+        catalog: Optional[bool] = None,
+        search: Optional[str] = None,
+    ):
         if id is not None:
             config = await PumpConfig.get_or_none(id=id).prefetch_related(
-                "pump_info", "impeller", "base_plate", "options", "test_documentation"
+                "pump_info", "seal", "motor", "impeller",
+                "base_plate", "options", "test_documentation",
             )
             return cls._serialize(config) if config else None
 
-        configs = await PumpConfig.all().prefetch_related(
-            "pump_info", "impeller", "base_plate", "options", "test_documentation"
+        qs = PumpConfig.all()
+        if catalog is not None:
+            qs = qs.filter(is_catalog=catalog)
+        if search:
+            qs = qs.filter(
+                Q(name__icontains=search)
+                | Q(notes__icontains=search)
+                | Q(pump_info__series__icontains=search)
+                | Q(pump_info__size__icontains=search)
+            )
+
+        configs = await qs.order_by("name").prefetch_related(
+            "pump_info", "seal", "motor", "impeller",
+            "base_plate", "options", "test_documentation",
         )
         return [cls._serialize(c) for c in configs]
 
@@ -363,11 +533,16 @@ class PumpConfigRepo:
         pump_config = await PumpConfig.get_or_none(id=id)
         if pump_config is None:
             return None
-        await pump_config.update_from_dict(data.model_dump(exclude_unset=True))
+        payload = data.model_dump(exclude_unset=True)
+        # Map the schema's "option_id" onto the model's "options_id" column.
+        if "option_id" in payload:
+            payload["options_id"] = payload.pop("option_id")
+        await pump_config.update_from_dict(payload)
         await pump_config.save()
         # Return the full nested representation after update too.
         await pump_config.fetch_related(
-            "pump_info", "impeller", "base_plate", "options", "test_documentation"
+            "pump_info", "seal", "motor", "impeller",
+            "base_plate", "options", "test_documentation",
         )
         return cls._serialize(pump_config)
 
@@ -382,7 +557,6 @@ from tortoise.transactions import in_transaction
 from src.models import Order, OrderItem, User
 from src.schemas import OrderSchema, OrderUpdateSchema
 
-
 class OrderRepo:
 
     VALID_STATUSES = {"pending", "confirmed", "shipped", "delivered", "cancelled"}
@@ -393,8 +567,8 @@ class OrderRepo:
         return {
             "id":             str(item.id),
             "quantity":       item.quantity,
-            "unit_price":     str(item.unit_price),
-            "subtotal":       str(Decimal(item.unit_price) * item.quantity),
+            "unit_price":     money_str(item.unit_price),
+            "subtotal":       money_str(Decimal(item.unit_price) * item.quantity),
             "pump_config":    PumpConfigRepo._serialize(pc) if pc else None,
             "pump_config_id": str(pc.id) if pc else None,
             "created_at":     item.created_at.isoformat() if item.created_at else None,
@@ -409,7 +583,7 @@ class OrderRepo:
             "status":           order.status,
             "notes":            order.notes,
             "shipping_address": order.shipping_address,
-            "total":            str(order.total),
+            "total":            money_str(order.total),
             "user_id":          str(order.user_id) if hasattr(order, "user_id") else None,
             "items":            [cls._serialize_item(i) for i in items],
             "created_at":       order.created_at.isoformat() if order.created_at else None,
@@ -418,18 +592,33 @@ class OrderRepo:
 
     @classmethod
     async def create(cls, user: User, dto: OrderSchema) -> dict:
-        # Validate every referenced pump config exists before we create anything.
+        # Validate every referenced pump config exists, and price each line from
+        # the config's server-side list_price (clients never set prices).
         config_ids = [i.pump_config_id for i in dto.items]
-        existing = await PumpConfig.filter(id__in=config_ids).values_list("id", flat=True)
-        existing_set = {str(x) for x in existing}
-        missing = [cid for cid in config_ids if cid not in existing_set]
+        configs = await PumpConfig.filter(id__in=config_ids)
+        price_by_id = {
+            str(c.id): (Decimal(c.list_price) if c.list_price is not None else Decimal("0"))
+            for c in configs
+        }
+        missing = [cid for cid in config_ids if cid not in price_by_id]
         if missing:
             raise HTTPException(
                 status_code=400,
                 detail=f"Unknown pump_config_id(s): {', '.join(missing)}",
             )
 
-        total = sum((Decimal(i.unit_price) * i.quantity for i in dto.items), Decimal("0"))
+        unpriced = [cid for cid in config_ids if price_by_id[cid] <= 0]
+        if unpriced:
+            raise HTTPException(
+                status_code=409,
+                detail="One or more selected configurations have no price set. "
+                       "An administrator must set a list price before it can be ordered.",
+            )
+
+        total = sum(
+            (price_by_id[i.pump_config_id] * i.quantity for i in dto.items),
+            Decimal("0"),
+        )
 
         async with in_transaction():
             order = await Order.create(
@@ -444,7 +633,7 @@ class OrderRepo:
                     order_id=order.id,
                     pump_config_id=it.pump_config_id,
                     quantity=it.quantity,
-                    unit_price=it.unit_price,
+                    unit_price=price_by_id[it.pump_config_id],
                 )
 
         return await cls.fetch(id=str(order.id), user=user)
@@ -468,6 +657,8 @@ class OrderRepo:
                 qs = qs.filter(user_id=user.id)
             order = await qs.prefetch_related(
                 "items__pump_config__pump_info",
+                "items__pump_config__seal",
+                "items__pump_config__motor",
                 "items__pump_config__impeller",
                 "items__pump_config__base_plate",
                 "items__pump_config__options",
@@ -486,6 +677,8 @@ class OrderRepo:
 
         orders = await qs.order_by("-created_at").prefetch_related(
             "items__pump_config__pump_info",
+            "items__pump_config__seal",
+            "items__pump_config__motor",
             "items__pump_config__impeller",
             "items__pump_config__base_plate",
             "items__pump_config__options",
@@ -515,3 +708,127 @@ class OrderRepo:
             raise HTTPException(status_code=404, detail="Order not found")
         await order.delete()
         return None
+
+
+# ---------------------------------------------------------------------------
+# PricingRepo  (mirrors the workbook's "PX Configurator" calculation)
+# ---------------------------------------------------------------------------
+from src.models import PriceList, OptionPrice
+from src.schemas import (
+    PriceListSchema,
+    OptionPriceSchema,
+    QuoteRequestSchema,
+)
+
+# Money rounds to cents, half-up, like a spreadsheet currency cell.
+from decimal import ROUND_HALF_UP
+
+_CENTS = Decimal("0.01")
+
+
+def _money(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(_CENTS, rounding=ROUND_HALF_UP)
+
+
+class PricingRepo:
+    """
+    Pricing rules loaded from the workbook's Price Lists tab:
+      * PriceList   -> base price per (product_family, size)
+      * OptionPrice -> add-on price per (field, option)
+
+    The quote math follows PX Configurator:
+        unit_list      = base_price + sum(option_prices)
+        extended       = unit_list * quantity
+        discount_amount= extended * discount_pct/100
+        subtotal       = extended - discount_amount
+        tax            = subtotal * tax_rate/100
+        total          = subtotal + tax
+    """
+
+    # ----- price list CRUD -------------------------------------------------
+    @classmethod
+    async def list_base_prices(cls):
+        return await PriceList.all().order_by("product_family", "size")
+
+    @classmethod
+    async def list_option_prices(cls):
+        return await OptionPrice.all().order_by("field", "option")
+
+    @classmethod
+    async def upsert_base_price(cls, dto: PriceListSchema):
+        obj, _ = await PriceList.update_or_create(
+            product_family=dto.product_family,
+            size=dto.size,
+            defaults={"base_price": dto.base_price},
+        )
+        return obj
+
+    @classmethod
+    async def upsert_option_price(cls, dto: OptionPriceSchema):
+        obj, _ = await OptionPrice.update_or_create(
+            field=dto.field,
+            option=dto.option,
+            defaults={"option_price": dto.option_price},
+        )
+        return obj
+
+    # ----- the quote engine ------------------------------------------------
+    @classmethod
+    async def quote(cls, dto: QuoteRequestSchema) -> dict:
+        warnings: list[str] = []
+
+        base_row = await PriceList.get_or_none(
+            product_family=dto.product_family, size=dto.size
+        )
+        if base_row is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No base price for '{dto.product_family} | {dto.size}'",
+            )
+        base_price = Decimal(base_row.base_price)
+
+        breakdown = [
+            {
+                "field": "Base Family / Size",
+                "option": f"{dto.product_family} / {dto.size}",
+                "price": _money(base_price),
+            }
+        ]
+
+        option_total = Decimal("0")
+        for field, option in dto.options.items():
+            row = await OptionPrice.get_or_none(field=field, option=option)
+            if row is None:
+                warnings.append(f"No price for {field} = '{option}'; treated as $0.00")
+                price = Decimal("0")
+            else:
+                price = Decimal(row.option_price)
+            option_total += price
+            breakdown.append(
+                {"field": field, "option": option, "price": _money(price)}
+            )
+
+        unit_list = base_price + option_total
+        extended = unit_list * dto.quantity
+        discount_amount = extended * (Decimal(dto.discount_pct) / Decimal("100"))
+        subtotal = extended - discount_amount
+        tax = subtotal * (Decimal(dto.tax_rate) / Decimal("100"))
+        total = subtotal + tax
+
+        return {
+            "product_family": dto.product_family,
+            "size": dto.size,
+            "quantity": dto.quantity,
+            "base_price": _money(base_price),
+            "option_price": _money(option_total),
+            "unit_list_price": _money(unit_list),
+            "extended_list_price": _money(extended),
+            "discount_pct": dto.discount_pct,
+            "discount_amount": _money(discount_amount),
+            "subtotal": _money(subtotal),
+            "tax_rate": dto.tax_rate,
+            "tax": _money(tax),
+            "total_quote": _money(total),
+            "breakdown": breakdown,
+            "warnings": warnings,
+        }

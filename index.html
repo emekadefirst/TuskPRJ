@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pump Configuration Builder</title>
+  <title>Pump Catalog</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -31,8 +31,8 @@
   <!-- ─── Top bar ─────────────────────────────────────── -->
   <header class="border-b border-border bg-surface px-6 py-4 flex items-center justify-between sticky top-0 z-30">
     <div>
-      <p class="text-brand font-bold text-sm tracking-widest uppercase">Pump Configuration Builder</p>
-      <p class="text-zinc-500 text-xs mt-1">Compose a complete pump spec from validated components</p>
+      <p class="text-brand font-bold text-sm tracking-widest uppercase">Pump Catalog</p>
+      <p class="text-zinc-500 text-xs mt-1">Browse ready-made pump configurations and place an order</p>
     </div>
     <div class="flex items-center gap-3">
       <a href="/dashboard"
@@ -54,101 +54,71 @@
     </div>
   </header>
 
-  <!-- ─── Stepper ─────────────────────────────────────── -->
-  <nav id="stepper" class="px-6 py-4 border-b border-border bg-surface/40 flex flex-wrap gap-2"></nav>
-
-  <!-- ─── Layout ──────────────────────────────────────── -->
-  <div class="flex flex-col lg:flex-row gap-6 p-6">
-
-    <!-- Builder panel -->
-    <section class="flex-1 min-w-0">
-      <div class="border border-border rounded-lg bg-surface">
-        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
-          <div>
-            <h2 class="text-lg font-bold" id="step-title">Step</h2>
-            <p class="text-zinc-500 text-xs mt-1" id="step-route">/</p>
-          </div>
-          <div class="flex gap-2">
-            <button id="btn-prev"
-                    class="px-3 py-1.5 text-xs border border-border rounded hover:bg-panel transition">‹ Previous</button>
-            <button id="btn-next"
-                    class="px-3 py-1.5 text-xs border border-brand text-brand rounded hover:bg-brand hover:text-black transition">Next ›</button>
-          </div>
-        </div>
-
-        <!-- Search + list + spec preview -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-0">
-          <!-- LEFT: pickable list -->
-          <div class="border-r border-border">
-            <div class="p-4 border-b border-border">
-              <input id="picker-search" type="text"
-                     placeholder="Search components…"
-                     class="w-full bg-panel border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
-              <p id="picker-count" class="text-zinc-600 text-xs mt-2">—</p>
-            </div>
-            <div id="picker-list" class="max-h-[60vh] overflow-y-auto"></div>
-          </div>
-
-          <!-- RIGHT: spec preview -->
-          <div class="p-5 bg-panel/40 min-h-[60vh]">
-            <h3 class="text-zinc-400 text-xs uppercase tracking-wider mb-3">Spec preview</h3>
-            <div id="spec-preview" class="text-sm text-zinc-300 space-y-2">
-              <p class="text-zinc-600 text-xs italic">Select an item to preview its full spec.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Summary sidebar -->
-    <aside class="w-full lg:w-96 shrink-0">
-      <div class="border border-border rounded-lg bg-surface sticky top-[140px]">
-        <div class="px-5 py-4 border-b border-border">
-          <h3 class="text-sm font-bold tracking-wider uppercase text-brand">Configuration</h3>
-          <p class="text-zinc-500 text-xs mt-1">Live summary of your build</p>
-        </div>
-
-        <div id="summary" class="p-3 space-y-2"></div>
-
-        <div class="px-5 py-4 border-t border-border space-y-2">
-          <button id="btn-save"
-                  class="w-full px-4 py-2.5 bg-brand text-black font-bold text-sm rounded hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition">
-            Save Pump Config
-          </button>
-          <button id="btn-reset"
-                  class="w-full px-4 py-2 border border-border text-xs text-zinc-400 rounded hover:bg-panel hover:text-white transition">
-            Reset selections
-          </button>
-          <p id="save-hint" class="text-zinc-600 text-xs text-center">Pick all five components to enable saving.</p>
-        </div>
-      </div>
-    </aside>
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- CATALOG                                               -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div id="view-catalog" class="p-6">
+    <div class="flex items-center gap-3 mb-5 flex-wrap">
+      <input id="catalog-search" type="text"
+             placeholder="Search catalog (series, size, name)…"
+             class="flex-1 min-w-[240px] bg-surface border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+      <span id="catalog-count" class="text-zinc-500 text-xs">—</span>
+    </div>
+    <div id="catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="text-zinc-600 text-xs">Loading catalog…</div>
+    </div>
   </div>
 
-  <!-- ─── Saved-config modal ──────────────────────────── -->
-  <div id="result-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-40 p-4">
-    <div class="bg-surface border border-border rounded-lg w-full max-w-lg p-6">
+  <!-- ─── Catalog detail modal ────────────────────────── -->
+  <div id="detail-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-40 p-4">
+    <div class="bg-surface border border-border rounded-lg w-full max-w-2xl p-6 max-h-[88vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="font-bold text-lg text-brand">✓ Pump Config Saved</h2>
+        <div>
+          <h2 class="font-bold text-lg text-brand" id="detail-title">Configuration</h2>
+          <p class="text-zinc-500 text-xs" id="detail-sub">—</p>
+        </div>
+        <button onclick="closeDetail()" class="text-zinc-500 hover:text-white text-xl">✕</button>
+      </div>
+      <div id="detail-body" class="space-y-4"></div>
+      <div class="flex justify-end gap-2 mt-5">
+        <button onclick="closeDetail()"
+                class="px-4 py-2 border border-border text-sm rounded hover:bg-panel transition">Close</button>
+        <button id="detail-order-btn"
+                class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">
+          Order this configuration
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Order modal ─────────────────────────────────── -->
+  <div id="result-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-40 p-4">
+    <div class="bg-surface border border-border rounded-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-bold text-lg text-brand" id="result-title">Order Configuration</h2>
         <button onclick="closeResult()" class="text-zinc-500 hover:text-white text-xl">✕</button>
       </div>
-      <pre id="result-body"
-           class="bg-panel border border-border rounded p-4 text-xs text-zinc-300 overflow-auto max-h-[40vh]"></pre>
 
-      <!-- Order form for the just-saved config -->
+      <!-- Clean spec summary card -->
+      <div id="result-body" class="border border-border rounded-lg bg-panel/50 overflow-hidden"></div>
+
+      <!-- Order form -->
       <div id="order-form" class="mt-4 border border-border rounded p-4 bg-panel/50">
-        <h3 class="text-zinc-400 text-xs uppercase tracking-wider mb-3">Place an order for this build</h3>
-        <div class="grid grid-cols-2 gap-3">
+        <h3 class="text-zinc-400 text-xs uppercase tracking-wider mb-3">Place an order</h3>
+        <div class="grid grid-cols-2 gap-3 items-end">
           <div>
             <label class="block text-zinc-500 text-[10px] uppercase tracking-wider mb-1">Quantity</label>
             <input id="order-qty" type="number" min="1" value="1"
                    class="w-full bg-panel border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
           </div>
-          <div>
-            <label class="block text-zinc-500 text-[10px] uppercase tracking-wider mb-1">Unit price</label>
-            <input id="order-price" type="number" min="0" step="0.01" value="0"
-                   class="w-full bg-panel border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+          <div class="text-right">
+            <p class="text-zinc-500 text-[10px] uppercase tracking-wider mb-1">Unit price</p>
+            <p id="order-unit-price" class="text-zinc-200 text-sm font-bold">—</p>
           </div>
+        </div>
+        <div class="mt-3 flex items-center justify-between border-t border-border pt-3">
+          <span class="text-zinc-400 text-xs uppercase tracking-wider">Order total</span>
+          <span id="order-total" class="text-brand text-lg font-bold">—</span>
         </div>
         <div class="mt-3">
           <label class="block text-zinc-500 text-[10px] uppercase tracking-wider mb-1">Shipping address</label>
@@ -164,31 +134,30 @@
       </div>
 
       <div class="flex justify-end gap-2 mt-5">
-        <button onclick="closeResult(); resetAll();"
-                class="px-4 py-2 border border-border text-sm rounded hover:bg-panel transition">Build another</button>
+        <button onclick="closeResult();"
+                class="px-4 py-2 border border-border text-sm rounded hover:bg-panel transition">Close</button>
         <button id="btn-order" onclick="placeOrder()"
-                class="px-4 py-2 border border-brand text-brand text-sm rounded hover:bg-brand hover:text-black transition">
+                class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">
           Place order
         </button>
         <a href="/dashboard"
-           class="px-4 py-2 bg-brand text-black font-bold text-sm rounded hover:opacity-90 transition">View dashboard</a>
+           class="px-4 py-2 border border-brand text-brand text-sm rounded hover:bg-brand hover:text-black transition">View dashboard</a>
       </div>
     </div>
   </div>
 
   <!-- ─── Toast ───────────────────────────────────────── -->
-  <div id="toast" class="hidden fixed bottom-6 right-6 border rounded px-4 py-2 text-sm shadow-lg z-50"></div>
+  <div id="toast" class="hidden fixed bottom-6 right-6 border rounded px-4 py-2 text-sm shadow-lg z-[60]"></div>
 
   <!-- ─── Auth gate ───────────────────────────────────── -->
   <div id="auth-gate"
        class="fixed inset-0 bg-panel/95 backdrop-blur-sm flex items-center justify-center z-40 p-6">
     <div class="w-full max-w-md border border-border rounded-lg bg-surface shadow-2xl">
       <div class="px-6 pt-6 pb-2 text-center">
-        <p class="text-brand font-bold text-sm tracking-widest uppercase">Pump Configuration Builder</p>
+        <p class="text-brand font-bold text-sm tracking-widest uppercase">Pump Catalog</p>
         <p class="text-zinc-500 text-xs mt-1">Sign in to continue</p>
       </div>
 
-      <!-- Tabs -->
       <div class="flex border-b border-border mt-4">
         <button id="tab-login"
                 class="flex-1 py-2 text-xs uppercase tracking-wider border-b-2 border-brand text-brand">
@@ -236,55 +205,48 @@
 // ═══════════════════════════════════════════════════════════
 // Config
 // ═══════════════════════════════════════════════════════════
-// Empty string makes every fetch use the same origin the page was
-// loaded from (e.g. http://127.0.0.1:8000), so cookies flow naturally.
 const API = "";
 
-// Each step picks a single record from one resource.
-// `payloadKey` is the field name that goes into the PumpConfig POST body.
-const STEPS = [
+// Component groups shown when rendering a full PumpConfig spec, with the
+// field order to display for each.
+const CONFIG_PARTS = [
   {
-    key:        "pump_info",
-    payloadKey: "pump_info_id",
-    label:      "Pump Info",
-    route:      "/pump-info",
-    primary:    ["series", "size", "pump_material"],   // headline shown in list / summary
-    secondary:  ["shaft_configuration", "casing_metal"], // small grey line in list
+    key: "pump_info", label: "Pump Info",
     detail: [
       "series","size","pump_material","shaft_configuration","casing_metal",
-      "casing_drain","casing_tap","flange_configuration","spot_facing",
+      "casing_drain","casing_tap","casing_gasket","flange_configuration","spot_facing",
       "casing_wear_ring","tack_weld_wear_ring","casing_mounting","hardware",
       "seal_chamber_config","shipping_gasket","cradle_material"
     ],
   },
   {
-    key:        "impeller",
-    payloadKey: "impeller_id",
-    label:      "Impeller",
-    route:      "/impeller",
-    primary:    ["impeller_range", "impeller_trim"],
-    secondary:  ["impeller_material", "impeller_balance"],
-    detail:     ["impeller_range","impeller_trim","impeller_balance","impeller_material","impeller_wear_ring_material"],
+    key: "seal", label: "Seal",
+    detail: [
+      "seal_option","seal_mfr","seal_configuration","seal_type","gland_type","gland_gasket",
+      "shaft_sleeve_material","inboard_rotating_face","inboard_stationary_face","inboard_elastomer",
+      "outboard_rotating_face","outboard_stationary_face","outboard_elastomer"
+    ],
   },
   {
-    key:        "base_plate",
-    payloadKey: "base_plate_id",
-    label:      "Base Plate",
-    route:      "/base-plate",
-    primary:    ["baseplate_type", "baseplate_material"],
-    secondary:  ["drip_pan", "lifting_lugs"],
+    key: "motor", label: "Motor",
+    detail: [
+      "motor_control","power_hp","speed","voltage","phase_hertz","frame",
+      "enclosure","efficiency","c_face_adapter","manufacturer"
+    ],
+  },
+  {
+    key: "impeller", label: "Impeller",
+    detail: ["impeller_range","impeller_trim","impeller_balance","impeller_material","impeller_wear_ring_material"],
+  },
+  {
+    key: "base_plate", label: "Base Plate",
     detail: [
       "baseplate_type","baseplate_material","drip_pan","allignment_lugs","lifting_lugs",
       "leveling_screws","grounding_lugs","grout_hole","isolation_pads","stilts"
     ],
   },
   {
-    key:        "options",
-    payloadKey: "option_id", // PumpConfigSchema uses option_id (singular)
-    label:      "Options",
-    route:      "/options",
-    primary:    ["coupling_type", "oil_options"],
-    secondary:  ["lubrication_options", "coupling_guard"],
+    key: "options", label: "Options",
     detail: [
       "coupling_type","coupling_guard","auxillary_nameplate","crating","oil_options",
       "bearing_frame_cooling","lubrication_options","oil_seat","sight_gauge",
@@ -292,12 +254,7 @@ const STEPS = [
     ],
   },
   {
-    key:        "test_documentation",
-    payloadKey: "test_documentation_id",
-    label:      "Test Docs",
-    route:      "/test-documentation",
-    primary:    ["performance_testing", "hydro_testing"],
-    secondary:  ["vibration", "general_inspection"],
+    key: "test_documentation", label: "Test Docs",
     detail: [
       "performance_testing","hydro_testing","vibration","sound_level","general_inspection",
       "documenttation_1","documenttation_2","documenttation_3","documenttation_4",
@@ -307,23 +264,16 @@ const STEPS = [
 ];
 
 // State
-let stepIdx       = 0;
-const cache       = {};   // route -> rows[]
-const selected    = {};   // step.key -> row
-let filteredRows  = [];
+let catalogRows     = [];
+let lastSavedConfig = null;
 
 // ═══════════════════════════════════════════════════════════
 // Tiny helpers
 // ═══════════════════════════════════════════════════════════
 const $ = (id) => document.getElementById(id);
 
-// Always send the auth cookie with every API call.
 function apiFetch(path, opts = {}) {
-  return fetch(path, {
-    credentials: "include",
-    ...opts,
-    headers: { ...(opts.headers || {}) },
-  });
+  return fetch(path, { credentials: "include", ...opts, headers: { ...(opts.headers || {}) } });
 }
 
 function escHtml(s) {
@@ -333,7 +283,7 @@ function escHtml(s) {
 function toast(msg, kind = "info") {
   const el = $("toast");
   el.textContent = msg;
-  el.className = "fixed bottom-6 right-6 border rounded px-4 py-2 text-sm shadow-lg z-50 " +
+  el.className = "fixed bottom-6 right-6 border rounded px-4 py-2 text-sm shadow-lg z-[60] " +
     (kind === "ok"  ? "bg-surface border-brand text-brand" :
      kind === "err" ? "bg-surface border-red-700 text-red-400" :
                       "bg-surface border-border text-zinc-200");
@@ -342,11 +292,18 @@ function toast(msg, kind = "info") {
   el._t = setTimeout(() => el.classList.add("hidden"), 2600);
 }
 
-function joinFields(row, fields) {
-  return fields
-    .map(f => row[f])
-    .filter(v => v != null && String(v).trim() !== "" && v !== "Not required")
-    .join(" · ");
+function fmtMoney(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return isNaN(n) ? String(v) : `$${n.toFixed(2)}`;
+}
+
+async function parseError(res) {
+  const err = await res.json().catch(() => ({}));
+  if (typeof err.detail === "string") return err.detail;
+  if (Array.isArray(err.detail))
+    return err.detail.map(d => `${(d.loc || []).slice(-1)}: ${d.msg}`).join(" · ");
+  return `HTTP ${res.status}`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -364,298 +321,211 @@ async function ping() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// Stepper
+// Catalog
 // ═══════════════════════════════════════════════════════════
-function renderStepper() {
-  $("stepper").innerHTML = STEPS.map((s, i) => {
-    const isActive = i === stepIdx;
-    const isDone   = !!selected[s.key];
-    const tone     = isActive
-      ? "bg-brand text-black border-brand"
-      : isDone
-        ? "border-brand text-brand bg-panel"
-        : "border-border text-zinc-400 bg-panel hover:text-white";
-    return `
-      <button onclick="goToStep(${i})"
-              class="px-3 py-2 rounded border text-xs flex items-center gap-2 transition ${tone}">
-        <span class="w-5 h-5 rounded-full border ${isActive ? 'border-black' : (isDone ? 'border-brand' : 'border-zinc-600')} flex items-center justify-center text-[10px]">
-          ${isDone ? "✓" : (i + 1)}
-        </span>
-        <span class="font-bold uppercase tracking-wider">${s.label}</span>
-        <span class="text-[10px] opacity-70">${s.route}</span>
-      </button>
-    `;
-  }).join("");
-}
-
-function goToStep(i) {
-  if (i < 0 || i >= STEPS.length) return;
-  stepIdx = i;
-  loadStep();
-}
-
-$("btn-prev").addEventListener("click", () => goToStep(stepIdx - 1));
-$("btn-next").addEventListener("click", () => goToStep(stepIdx + 1));
-
-// ═══════════════════════════════════════════════════════════
-// Step loading
-// ═══════════════════════════════════════════════════════════
-async function loadStep() {
-  const step = STEPS[stepIdx];
-  $("step-title").textContent = step.label;
-  $("step-route").textContent = `Source: ${step.route}`;
-  $("picker-search").value = "";
-  $("picker-list").innerHTML =
-    `<div class="text-zinc-600 text-xs p-4">Loading components…</div>`;
-
-  // Disable nav buttons at edges
-  $("btn-prev").disabled = stepIdx === 0;
-  $("btn-prev").classList.toggle("opacity-30", stepIdx === 0);
-  $("btn-next").disabled = stepIdx === STEPS.length - 1;
-  $("btn-next").classList.toggle("opacity-30", stepIdx === STEPS.length - 1);
-
-  renderStepper();
-  renderSummary();
-
+async function loadCatalog() {
+  const grid = $("catalog-grid");
+  grid.innerHTML = `<div class="text-zinc-600 text-xs">Loading catalog…</div>`;
   try {
-    if (!cache[step.route]) {
-      const res = await apiFetch(`${API}${step.route}/`);
-      if (res.status === 401) return forceLogout();
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      cache[step.route] = await res.json();
-    }
-    const rows = Array.isArray(cache[step.route]) ? cache[step.route] : [];
-    filteredRows = rows;
-    renderList();
-    renderSpec(selected[step.key] || rows[0] || null);
-  } catch (e) {
-    $("picker-list").innerHTML =
-      `<div class="text-red-400 text-xs p-4">⚠ Failed to load: ${escHtml(e.message)}</div>`;
-    $("picker-count").textContent = "—";
-    renderSpec(null);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// List rendering
-// ═══════════════════════════════════════════════════════════
-function renderList() {
-  const step = STEPS[stepIdx];
-  const list = $("picker-list");
-  const total = (cache[step.route] || []).length;
-
-  if (!filteredRows.length) {
-    list.innerHTML =
-      `<div class="text-zinc-600 text-xs p-4 italic">No components match.</div>`;
-    $("picker-count").textContent = `0 of ${total}`;
-    return;
-  }
-
-  list.innerHTML = filteredRows.map(row => {
-    const isSel = selected[step.key]?.id === row.id;
-    const head  = joinFields(row, step.primary)   || "(no label)";
-    const sub   = joinFields(row, step.secondary) || "—";
-    return `
-      <div data-id="${row.id}"
-           class="px-4 py-3 border-b border-border cursor-pointer transition
-                  ${isSel ? 'bg-panel border-l-2 border-l-brand' : 'hover:bg-panel'}">
-        <div class="flex items-center justify-between gap-3">
-          <div class="min-w-0">
-            <p class="text-sm ${isSel ? 'text-brand font-bold' : 'text-zinc-200'} truncate">${escHtml(head)}</p>
-            <p class="text-zinc-500 text-xs truncate">${escHtml(sub)}</p>
-          </div>
-          ${isSel ? '<span class="text-brand text-xs shrink-0">SELECTED</span>' : ''}
-        </div>
-        <p class="text-zinc-700 text-[10px] mt-1 truncate">${escHtml(row.id)}</p>
-      </div>
-    `;
-  }).join("");
-
-  $("picker-count").textContent = `${filteredRows.length} of ${total} components`;
-
-  list.querySelectorAll("[data-id]").forEach(item => {
-    item.addEventListener("click", () => {
-      const row = filteredRows.find(r => r.id === item.dataset.id);
-      if (!row) return;
-      selected[STEPS[stepIdx].key] = row;
-      renderList();
-      renderStepper();
-      renderSummary();
-      renderSpec(row);
-    });
-
-    item.addEventListener("mouseenter", () => {
-      const row = filteredRows.find(r => r.id === item.dataset.id);
-      if (row) renderSpec(row);
-    });
-  });
-}
-
-$("picker-search").addEventListener("input", (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  const step = STEPS[stepIdx];
-  const all  = cache[step.route] || [];
-  filteredRows = q
-    ? all.filter(r =>
-        Object.values(r).some(v => v != null && String(v).toLowerCase().includes(q)))
-    : all;
-  renderList();
-});
-
-// ═══════════════════════════════════════════════════════════
-// Spec preview
-// ═══════════════════════════════════════════════════════════
-function renderSpec(row) {
-  const step = STEPS[stepIdx];
-  const box  = $("spec-preview");
-
-  if (!row) {
-    box.innerHTML =
-      `<p class="text-zinc-600 text-xs italic">Nothing to preview.</p>`;
-    return;
-  }
-
-  const isSel = selected[step.key]?.id === row.id;
-
-  box.innerHTML = `
-    <div class="flex items-center justify-between mb-3">
-      <p class="text-zinc-400 text-xs">${escHtml(joinFields(row, step.primary) || step.label)}</p>
-      <button onclick="pickRow('${row.id}')"
-              class="px-3 py-1 text-xs rounded border ${isSel
-                ? 'border-brand text-brand bg-panel'
-                : 'border-border hover:border-brand hover:text-brand'} transition">
-        ${isSel ? "✓ Selected" : "Use this"}
-      </button>
-    </div>
-    <p class="text-zinc-700 text-[10px] mb-3 break-all">id: ${escHtml(row.id)}</p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-      ${step.detail.map(f => {
-        const v = row[f];
-        const empty = v == null || v === "" || v === "Not required";
-        return `
-          <div class="border-b border-border/60 pb-1">
-            <p class="text-zinc-600 text-[10px] uppercase tracking-wider">${f}</p>
-            <p class="text-zinc-${empty ? '600' : '200'} text-xs ${empty ? 'italic' : ''}">
-              ${empty ? '—' : escHtml(String(v))}
-            </p>
-          </div>
-        `;
-      }).join("")}
-    </div>
-  `;
-}
-
-function pickRow(id) {
-  const step = STEPS[stepIdx];
-  const row  = (cache[step.route] || []).find(r => r.id === id);
-  if (!row) return;
-  selected[step.key] = row;
-  renderList();
-  renderStepper();
-  renderSummary();
-  renderSpec(row);
-  toast(`${step.label} selected`, "ok");
-}
-
-// ═══════════════════════════════════════════════════════════
-// Summary
-// ═══════════════════════════════════════════════════════════
-function renderSummary() {
-  $("summary").innerHTML = STEPS.map((s, i) => {
-    const row = selected[s.key];
-    const head = row ? (joinFields(row, s.primary) || "(no label)") : "Not selected";
-    const sub  = row ? (joinFields(row, s.secondary) || "") : "";
-    return `
-      <div onclick="goToStep(${i})"
-           class="border ${row ? 'border-brand/50' : 'border-border'} rounded p-3 cursor-pointer hover:bg-panel transition">
-        <div class="flex items-center justify-between">
-          <p class="text-zinc-500 text-[10px] uppercase tracking-wider">${s.label}</p>
-          <span class="text-[10px] ${row ? 'text-brand' : 'text-zinc-600'}">${row ? '✓' : `STEP ${i + 1}`}</span>
-        </div>
-        <p class="${row ? 'text-zinc-200' : 'text-zinc-600 italic'} text-xs mt-1 truncate">${escHtml(head)}</p>
-        ${sub ? `<p class="text-zinc-600 text-[10px] mt-0.5 truncate">${escHtml(sub)}</p>` : ""}
-      </div>
-    `;
-  }).join("");
-
-  const allPicked = STEPS.every(s => selected[s.key]);
-  $("btn-save").disabled = !allPicked;
-  $("save-hint").textContent = allPicked
-    ? "Ready to save."
-    : `${STEPS.filter(s => !selected[s.key]).length} component(s) still to pick.`;
-}
-
-// ═══════════════════════════════════════════════════════════
-// Save / Reset
-// ═══════════════════════════════════════════════════════════
-$("btn-save").addEventListener("click", saveConfig);
-$("btn-reset").addEventListener("click", () => {
-  if (!confirm("Clear all current selections?")) return;
-  resetAll();
-});
-
-async function saveConfig() {
-  const payload = {};
-  STEPS.forEach(s => { payload[s.payloadKey] = selected[s.key].id; });
-
-  const btn = $("btn-save");
-  btn.disabled = true;
-  btn.textContent = "Saving…";
-
-  try {
-    const res = await apiFetch(`${API}/pump-config/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const res = await apiFetch(`${API}/pump-config/?catalog=true`);
     if (res.status === 401) return forceLogout();
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const detail = typeof err.detail === "string"
-        ? err.detail
-        : Array.isArray(err.detail)
-          ? err.detail.map(d => `${(d.loc || []).join(".")}: ${d.msg}`).join(" · ")
-          : `HTTP ${res.status}`;
-      throw new Error(detail);
-    }
-    const saved = await res.json();
-    lastSavedConfig = saved;
-    $("result-body").textContent = JSON.stringify(saved, null, 2);
-    // Reset order form fields each time
-    $("order-qty").value = "1";
-    $("order-price").value = "0";
-    $("order-shipping").value = "";
-    $("order-notes").value = "";
-    $("order-error").classList.add("hidden");
-    $("btn-order").disabled = false;
-    $("btn-order").textContent = "Place order";
-    $("result-modal").classList.remove("hidden");
-    toast("Pump config saved", "ok");
+    if (!res.ok) throw new Error(await parseError(res));
+    catalogRows = await res.json();
+    renderCatalog(catalogRows);
   } catch (e) {
-    toast(`Save failed: ${e.message}`, "err");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Save Pump Config";
+    grid.innerHTML = `<div class="text-red-400 text-xs">⚠ Failed to load catalog: ${escHtml(e.message)}</div>`;
+    $("catalog-count").textContent = "—";
   }
 }
 
-function closeResult() {
-  $("result-modal").classList.add("hidden");
-}
+function renderCatalog(rows) {
+  const grid = $("catalog-grid");
+  const total = catalogRows.length;
+  $("catalog-count").textContent = `${rows.length} of ${total} configurations`;
 
-// ═══════════════════════════════════════════════════════════
-// Place an order for the just-saved pump config
-// ═══════════════════════════════════════════════════════════
-let lastSavedConfig = null;
-
-async function placeOrder() {
-  if (!lastSavedConfig?.id) {
-    toast("No pump config to order", "err");
+  if (!rows.length) {
+    grid.innerHTML = `<div class="text-zinc-600 text-xs italic">No configurations match.</div>`;
     return;
   }
 
-  const qty   = parseInt($("order-qty").value, 10) || 1;
-  const price = parseFloat($("order-price").value) || 0;
+  grid.innerHTML = rows.map(cfg => {
+    const pi = cfg.pump_info || {};
+    const motor = cfg.motor || {};
+    const seal = cfg.seal || {};
+    const price = fmtMoney(cfg.list_price);
+    return `
+      <div class="border border-border rounded-lg bg-surface p-4 flex flex-col hover:border-brand/60 transition">
+        <div class="flex items-start justify-between gap-2">
+          <p class="text-sm font-bold text-zinc-100 leading-snug">${escHtml(cfg.name || pi.series || "Configuration")}</p>
+          <span class="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-brand/40 text-brand">${escHtml(pi.series || "—")}</span>
+        </div>
+        <div class="mt-3 space-y-1.5 text-xs text-zinc-400 flex-1">
+          <div class="flex justify-between"><span class="text-zinc-600">Size</span><span class="text-zinc-300">${escHtml(pi.size || "—")}</span></div>
+          <div class="flex justify-between"><span class="text-zinc-600">Material</span><span class="text-zinc-300">${escHtml(pi.pump_material || "—")}</span></div>
+          <div class="flex justify-between"><span class="text-zinc-600">Seal</span><span class="text-zinc-300">${escHtml(seal.seal_type || "—")}</span></div>
+          <div class="flex justify-between"><span class="text-zinc-600">Motor</span><span class="text-zinc-300">${escHtml([motor.power_hp && motor.power_hp + " HP", motor.voltage].filter(Boolean).join(" · ") || "—")}</span></div>
+        </div>
+        <div class="mt-3 pt-3 border-t border-border flex items-center justify-between">
+          <span class="text-brand font-bold text-sm">${price || "Quote"}</span>
+          <div class="flex gap-2">
+            <button onclick="openDetail('${cfg.id}')"
+                    class="px-2.5 py-1.5 text-xs border border-border rounded hover:border-brand hover:text-brand transition">Details</button>
+            <button onclick="orderCatalog('${cfg.id}')"
+                    class="px-2.5 py-1.5 text-xs bg-brand text-black font-bold rounded hover:opacity-90 transition">Order</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+$("catalog-search").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const filtered = q
+    ? catalogRows.filter(cfg => {
+        const hay = [cfg.name, cfg.pump_info?.series, cfg.pump_info?.size,
+                     cfg.pump_info?.pump_material, cfg.seal?.seal_type, cfg.motor?.power_hp]
+                    .filter(Boolean).join(" ").toLowerCase();
+        return hay.includes(q);
+      })
+    : catalogRows;
+  renderCatalog(filtered);
+});
+
+function findConfig(id) {
+  return catalogRows.find(c => c.id === id);
+}
+
+// ─── Catalog detail modal ──────────────────────────
+function renderPartGrid(part, fields) {
+  if (!part) return `<p class="text-zinc-600 text-xs italic">Not included.</p>`;
+  const cells = fields
+    .filter(f => f in part)
+    .map(f => {
+      const v = part[f];
+      const empty = v == null || v === "" || v === "Not required" || v === "N/A";
+      return `
+        <div class="border-b border-border/60 pb-1">
+          <p class="text-zinc-600 text-[10px] uppercase tracking-wider">${f}</p>
+          <p class="text-zinc-${empty ? '600' : '200'} text-xs ${empty ? 'italic' : ''}">${empty ? '—' : escHtml(String(v))}</p>
+        </div>`;
+    }).join("");
+  return `<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">${cells}</div>`;
+}
+
+function openDetail(id) {
+  const cfg = findConfig(id);
+  if (!cfg) return;
+  $("detail-title").textContent = cfg.name || "Configuration";
+  $("detail-sub").textContent = [cfg.pump_info?.series, cfg.pump_info?.size].filter(Boolean).join(" · ") || cfg.id;
+
+  $("detail-body").innerHTML = CONFIG_PARTS.map(p => {
+    const part = cfg[p.key];
+    if (!part) return "";
+    return `
+      <div>
+        <p class="text-brand text-xs uppercase tracking-wider mb-2">${p.label}</p>
+        ${renderPartGrid(part, p.detail)}
+      </div>`;
+  }).join("") + (cfg.notes ? `<p class="text-zinc-500 text-xs italic pt-2 border-t border-border">${escHtml(cfg.notes)}</p>` : "");
+
+  $("detail-order-btn").onclick = () => { closeDetail(); orderCatalog(id); };
+  $("detail-modal").classList.remove("hidden");
+}
+function closeDetail() { $("detail-modal").classList.add("hidden"); }
+window.openDetail = openDetail;
+window.closeDetail = closeDetail;
+
+// ═══════════════════════════════════════════════════════════
+// Order modal
+// ═══════════════════════════════════════════════════════════
+// Render a PumpConfig as a clean spec card (not raw JSON).
+function renderConfigCard(cfg) {
+  const pi = cfg.pump_info || {};
+  const price = fmtMoney(cfg.list_price);
+
+  const partsHtml = CONFIG_PARTS.map(p => {
+    const part = cfg[p.key];
+    if (!part) return "";
+    const rows = p.detail
+      .map(f => [f, part[f]])
+      .filter(([, v]) => v != null && String(v).trim() !== "" && v !== "Not required" && v !== "N/A")
+      .map(([f, v]) => `
+        <div class="flex justify-between gap-3 py-0.5">
+          <span class="text-zinc-600 text-[11px]">${escHtml(f.replace(/_/g, " "))}</span>
+          <span class="text-zinc-300 text-[11px] text-right truncate">${escHtml(String(v))}</span>
+        </div>`).join("");
+    if (!rows) return "";
+    return `
+      <div class="px-4 py-3 border-t border-border">
+        <p class="text-brand text-[10px] uppercase tracking-wider mb-1.5">${p.label}</p>
+        ${rows}
+      </div>`;
+  }).join("");
+
+  return `
+    <div class="px-4 py-3 flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <p class="text-zinc-100 font-bold text-sm truncate">${escHtml(cfg.name || pi.series || "Configuration")}</p>
+        <p class="text-zinc-500 text-xs">${escHtml([pi.series, pi.size, pi.pump_material].filter(Boolean).join(" · ") || "—")}</p>
+      </div>
+      <div class="text-right shrink-0">
+        <p class="text-zinc-600 text-[10px] uppercase tracking-wider">List price</p>
+        <p class="text-brand font-bold">${price || "—"}</p>
+      </div>
+    </div>
+    ${partsHtml}`;
+}
+
+function orderCatalog(id) {
+  const cfg = findConfig(id);
+  if (!cfg) return;
+  lastSavedConfig = cfg;
+  $("result-title").textContent = "Order Configuration";
+  $("result-body").innerHTML = renderConfigCard(cfg);
+  resetOrderForm();
+  $("result-modal").classList.remove("hidden");
+}
+window.orderCatalog = orderCatalog;
+
+function closeResult() { $("result-modal").classList.add("hidden"); }
+window.closeResult = closeResult;
+
+// Price comes from the server (the config's list_price). Recompute the
+// displayed total whenever the quantity changes.
+function unitPrice() {
+  const p = Number(lastSavedConfig?.list_price);
+  return isNaN(p) ? 0 : p;
+}
+
+function refreshOrderTotals() {
+  const qty = parseInt($("order-qty").value, 10) || 1;
+  const unit = unitPrice();
+  $("order-unit-price").textContent = unit > 0 ? `$${unit.toFixed(2)}` : "no price set";
+  $("order-total").textContent = unit > 0 ? `$${(unit * qty).toFixed(2)}` : "—";
+  const orderable = unit > 0;
+  $("btn-order").disabled = !orderable;
+  $("btn-order").classList.toggle("opacity-40", !orderable);
+  $("btn-order").classList.toggle("cursor-not-allowed", !orderable);
+}
+
+function resetOrderForm() {
+  $("order-qty").value = "1";
+  $("order-shipping").value = "";
+  $("order-notes").value = "";
+  $("order-error").classList.add("hidden");
+  $("btn-order").textContent = "Place order";
+  refreshOrderTotals();
+}
+$("order-qty").addEventListener("input", refreshOrderTotals);
+
+// ═══════════════════════════════════════════════════════════
+// Place an order
+// ═══════════════════════════════════════════════════════════
+async function placeOrder() {
+  if (!lastSavedConfig?.id) { toast("No configuration selected", "err"); return; }
+
+  const qty = parseInt($("order-qty").value, 10) || 1;
   const shipping = $("order-shipping").value.trim();
   const notes    = $("order-notes").value.trim();
 
@@ -665,21 +535,16 @@ async function placeOrder() {
     return;
   }
 
+  // No unit_price here: the server prices each line from the config's list_price.
   const payload = {
-    items: [{
-      pump_config_id: lastSavedConfig.id,
-      quantity: qty,
-      unit_price: price,
-    }],
+    items: [{ pump_config_id: lastSavedConfig.id, quantity: qty }],
     shipping_address: shipping || null,
     notes: notes || null,
   };
 
   const btn = $("btn-order");
-  btn.disabled = true;
-  btn.textContent = "Placing order…";
+  btn.disabled = true; btn.textContent = "Placing order…";
   $("order-error").classList.add("hidden");
-
   try {
     const res = await apiFetch(`${API}/orders/`, {
       method: "POST",
@@ -687,38 +552,22 @@ async function placeOrder() {
       body: JSON.stringify(payload),
     });
     if (res.status === 401) return forceLogout();
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const msg = typeof err.detail === "string"
-        ? err.detail
-        : Array.isArray(err.detail)
-          ? err.detail.map(d => `${(d.loc || []).slice(-1)}: ${d.msg}`).join(" · ")
-          : `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
+    if (!res.ok) throw new Error(await parseError(res));
     const order = await res.json();
-    toast(`Order ${String(order.id).slice(0,8)}… placed`, "ok");
-    btn.textContent = "✓ Ordered";
-    btn.disabled = true;
+    toast(`Order ${String(order.id).slice(0,8)}… placed · $${Number(order.total).toFixed(2)}`, "ok");
+    btn.textContent = "✓ Ordered"; btn.disabled = true;
   } catch (e) {
     $("order-error").textContent = e.message;
     $("order-error").classList.remove("hidden");
-    btn.disabled = false;
-    btn.textContent = "Place order";
+    btn.disabled = false; btn.textContent = "Place order";
   }
 }
 window.placeOrder = placeOrder;
 
-function resetAll() {
-  Object.keys(selected).forEach(k => delete selected[k]);
-  stepIdx = 0;
-  loadStep();
-}
-
 // ═══════════════════════════════════════════════════════════
-// Auth (login / register / logout / current user)
+// Auth
 // ═══════════════════════════════════════════════════════════
-let authMode = "login"; // or "register"
+let authMode = "login";
 let currentUser = null;
 
 function showAuthGate(show) {
@@ -726,19 +575,17 @@ function showAuthGate(show) {
   $("auth-gate").classList.toggle("flex", show);
 }
 
-function setAuthMode(mode) {
-  authMode = mode;
-  const isReg = mode === "register";
+function setAuthMode(m) {
+  authMode = m;
+  const isReg = m === "register";
   $("tab-login").classList.toggle("border-brand", !isReg);
   $("tab-login").classList.toggle("text-brand",   !isReg);
   $("tab-login").classList.toggle("border-transparent", isReg);
   $("tab-login").classList.toggle("text-zinc-400", isReg);
-
   $("tab-register").classList.toggle("border-brand", isReg);
   $("tab-register").classList.toggle("text-brand",   isReg);
   $("tab-register").classList.toggle("border-transparent", !isReg);
   $("tab-register").classList.toggle("text-zinc-400", !isReg);
-
   $("field-first").classList.toggle("hidden", !isReg);
   $("field-last").classList.toggle("hidden", !isReg);
   $("btn-auth-submit").textContent = isReg ? "Create account" : "Sign in";
@@ -769,51 +616,32 @@ function renderUserChip(user) {
 }
 
 async function submitAuth() {
-  const form = $("auth-form");
-  const data = Object.fromEntries(new FormData(form).entries());
+  const data = Object.fromEntries(new FormData($("auth-form")).entries());
   const url  = authMode === "register" ? `${API}/auth/register` : `${API}/auth/login`;
-
   $("auth-error").classList.add("hidden");
   $("btn-auth-submit").disabled = true;
   $("btn-auth-submit").textContent = authMode === "register" ? "Creating…" : "Signing in…";
-
   try {
     const res = await apiFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const msg = typeof err.detail === "string"
-        ? err.detail
-        : Array.isArray(err.detail)
-          ? err.detail.map(d => `${(d.loc || []).slice(-1)}: ${d.msg}`).join(" · ")
-          : `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
+    if (!res.ok) throw new Error(await parseError(res));
     const body = await res.json();
     renderUserChip(body.user);
     showAuthGate(false);
     toast(authMode === "register" ? "Account created" : "Signed in", "ok");
-
-    // First-time boot of the builder UI now that we're authed
-    Object.keys(cache).forEach(k => delete cache[k]);
-    Object.keys(selected).forEach(k => delete selected[k]);
-    stepIdx = 0;
-    ping();
-    renderStepper();
-    renderSummary();
-    loadStep();
+    bootApp();
   } catch (e) {
-    const err = $("auth-error");
-    err.textContent = e.message;
-    err.classList.remove("hidden");
+    $("auth-error").textContent = e.message;
+    $("auth-error").classList.remove("hidden");
   } finally {
     $("btn-auth-submit").disabled = false;
     $("btn-auth-submit").textContent = authMode === "register" ? "Create account" : "Sign in";
   }
 }
+window.submitAuth = submitAuth;
 
 async function logout() {
   try { await apiFetch(`${API}/auth/logout`, { method: "POST" }); } catch {}
@@ -823,19 +651,26 @@ async function logout() {
 
 function forceLogout() {
   renderUserChip(null);
-  Object.keys(cache).forEach(k => delete cache[k]);
-  Object.keys(selected).forEach(k => delete selected[k]);
-  stepIdx = 0;
+  catalogRows = [];
+  lastSavedConfig = null;
   showAuthGate(true);
 }
 
 // ═══════════════════════════════════════════════════════════
 // Boot
 // ═══════════════════════════════════════════════════════════
+function bootApp() {
+  ping();
+  loadCatalog();
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   $("tab-login").addEventListener("click",   () => setAuthMode("login"));
   $("tab-register").addEventListener("click",() => setAuthMode("register"));
   $("btn-logout").addEventListener("click", logout);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { closeResult(); closeDetail(); }
+  });
 
   setAuthMode("login");
 
@@ -843,20 +678,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (user) {
     renderUserChip(user);
     showAuthGate(false);
-    ping();
-    renderStepper();
-    renderSummary();
-    loadStep();
+    bootApp();
   } else {
     showAuthGate(true);
   }
 });
-
-// Expose handlers used in inline onclick attributes
-window.goToStep   = goToStep;
-window.pickRow    = pickRow;
-window.closeResult = closeResult;
-window.resetAll   = resetAll;
 </script>
 </body>
 </html>
